@@ -225,32 +225,37 @@ inline __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
 	iz0.m = _mm_and_si128(iz0.m, ff);
 
 
-	__m128  r = _mm_mul_ps(fz0, six);
-			r = _mm_sub_ps(r, fifteen);
-			r = _mm_mul_ps(r, fz0);
-			r = _mm_add_ps(r, ten);
-			r = _mm_mul_ps(r, fz0);
-			r = _mm_mul_ps(r, fz0);
-			r = _mm_mul_ps(r, fz0);
+	__m128  
+		r = _mm_mul_ps(fz0, six);
+		r = _mm_sub_ps(r, fifteen);
+		r = _mm_mul_ps(r, fz0);
+		r = _mm_add_ps(r, ten);
+		r = _mm_mul_ps(r, fz0);
+		r = _mm_mul_ps(r, fz0);
+		r = _mm_mul_ps(r, fz0);
 
-	__m128  t = _mm_mul_ps(fy0, six);
-			t = _mm_sub_ps(t, fifteen);
-			t = _mm_mul_ps(t, fy0);
-			t = _mm_add_ps(t, ten);
-			t = _mm_mul_ps(t, fy0);
-			t = _mm_mul_ps(t, fy0);
-			t = _mm_mul_ps(t, fy0);
+	__m128  
+		t = _mm_mul_ps(fy0, six);
+		t = _mm_sub_ps(t, fifteen);
+		t = _mm_mul_ps(t, fy0);
+		t = _mm_add_ps(t, ten);
+		t = _mm_mul_ps(t, fy0);
+		t = _mm_mul_ps(t, fy0);
+		t = _mm_mul_ps(t, fy0);
 
-	__m128  s = _mm_mul_ps(fx0, six);
-			s = _mm_sub_ps(s, fifteen);
-			s = _mm_mul_ps(s, fx0);
-			s = _mm_add_ps(s, ten);
-			s = _mm_mul_ps(s, fx0);
-			s = _mm_mul_ps(s, fx0);
-			s = _mm_mul_ps(s, fx0);
+	__m128  
+		s = _mm_mul_ps(fx0, six);
+		s = _mm_sub_ps(s, fifteen);
+		s = _mm_mul_ps(s, fx0);
+		s = _mm_add_ps(s, ten);
+		s = _mm_mul_ps(s, fx0);
+		s = _mm_mul_ps(s, fx0);
+		s = _mm_mul_ps(s, fx0);
 
 
 	//This section may be vectorizeable with AVX gather instructions
+	//if you don't trust your compiler to unroll a loop this small
+	//you could try unrolling it
 	union isimd p1, p2, p3, p4, p5, p6, p7, p8;
 	for (int i = 0; i < 4; i++)
 	{
