@@ -3,6 +3,7 @@
 
 #include <sys\timeb.h>
 #include <stdio.h>
+#include <math.h>
 #include <xmmintrin.h>
 #include <emmintrin.h> 
 #include <smmintrin.h>
@@ -45,8 +46,8 @@
 //access to the floats for unvectorizeable
 //lookup table access
 union isimd {
-	__m128i m;    
-	int a[4];	  
+	__m128i m;
+	int a[4];
 };
 
 union fsimd {
@@ -58,7 +59,9 @@ union fsimd {
 //constants
 __m128i one, two, four, eight, twelve, fourteen, fifteeni, ff;
 __m128 minusonef, zero, onef, six, fifteen, ten, scale;
-	
+
+const float pi = 3.14159265359;
+const float twopi = 6.2831853;
 
 // For non SIMD only
 #define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
@@ -70,7 +73,7 @@ init()
 {
 	//integer constants	
 	one = _mm_set_epi32(1, 1, 1, 1);
-	two = _mm_set_epi32(2, 2, 2, 2);	
+	two = _mm_set_epi32(2, 2, 2, 2);
 	four = _mm_set_epi32(4, 4, 4, 4);
 	eight = _mm_set_epi32(8, 8, 8, 8);
 	twelve = _mm_set_epi32(12, 12, 12, 12);
@@ -82,13 +85,13 @@ init()
 	minusonef = _mm_set_ps(-1, -1, -1, -1);
 	zero = _mm_setr_ps(0, 0, 0, 0);
 	onef = _mm_set_ps(1, 1, 1, 1);
-	ten = _mm_set_ps(10, 10, 10, 10);
 	six = _mm_set_ps(6, 6, 6, 6);
+	ten = _mm_set_ps(10, 10, 10, 10);
 	fifteen = _mm_set_ps(15, 15, 15, 15);
 
 	//final scaling constant
 	scale = _mm_set_ps(.936, .936, .936, .936);
-		
+
 }
 
 //---------------------------------------------------------------------
@@ -196,17 +199,17 @@ inline __m128  gradV(__m128i *hash, __m128 *x, __m128 *y, __m128 *z) {
 }
 
 
-inline __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
+inline __m128 noiseSIMD(__m128* x, __m128* y, __m128* z)
 {
 	union isimd ix0, iy0, ix1, iy1, iz0, iz1;
 	__m128 fx0, fy0, fz0, fx1, fy1, fz1;
-	
+
 	//mm_floor is the only SSE4 instruction
 	//you can get SSE2 compatbility by rolling your own floor
 	ix0.m = _mm_cvtps_epi32(_mm_floor_ps(*x));
 	iy0.m = _mm_cvtps_epi32(_mm_floor_ps(*y));
 	iz0.m = _mm_cvtps_epi32(_mm_floor_ps(*z));
-	
+
 
 	fx0 = _mm_sub_ps(*x, _mm_cvtepi32_ps(ix0.m));
 	fy0 = _mm_sub_ps(*y, _mm_cvtepi32_ps(iy0.m));
@@ -225,32 +228,32 @@ inline __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
 	iz0.m = _mm_and_si128(iz0.m, ff);
 
 
-	__m128  
+	__m128
 		r = _mm_mul_ps(fz0, six);
-		r = _mm_sub_ps(r, fifteen);
-		r = _mm_mul_ps(r, fz0);
-		r = _mm_add_ps(r, ten);
-		r = _mm_mul_ps(r, fz0);
-		r = _mm_mul_ps(r, fz0);
-		r = _mm_mul_ps(r, fz0);
+	r = _mm_sub_ps(r, fifteen);
+	r = _mm_mul_ps(r, fz0);
+	r = _mm_add_ps(r, ten);
+	r = _mm_mul_ps(r, fz0);
+	r = _mm_mul_ps(r, fz0);
+	r = _mm_mul_ps(r, fz0);
 
-	__m128  
+	__m128
 		t = _mm_mul_ps(fy0, six);
-		t = _mm_sub_ps(t, fifteen);
-		t = _mm_mul_ps(t, fy0);
-		t = _mm_add_ps(t, ten);
-		t = _mm_mul_ps(t, fy0);
-		t = _mm_mul_ps(t, fy0);
-		t = _mm_mul_ps(t, fy0);
+	t = _mm_sub_ps(t, fifteen);
+	t = _mm_mul_ps(t, fy0);
+	t = _mm_add_ps(t, ten);
+	t = _mm_mul_ps(t, fy0);
+	t = _mm_mul_ps(t, fy0);
+	t = _mm_mul_ps(t, fy0);
 
-	__m128  
+	__m128
 		s = _mm_mul_ps(fx0, six);
-		s = _mm_sub_ps(s, fifteen);
-		s = _mm_mul_ps(s, fx0);
-		s = _mm_add_ps(s, ten);
-		s = _mm_mul_ps(s, fx0);
-		s = _mm_mul_ps(s, fx0);
-		s = _mm_mul_ps(s, fx0);
+	s = _mm_sub_ps(s, fifteen);
+	s = _mm_mul_ps(s, fx0);
+	s = _mm_add_ps(s, ten);
+	s = _mm_mul_ps(s, fx0);
+	s = _mm_mul_ps(s, fx0);
+	s = _mm_mul_ps(s, fx0);
 
 
 	//This section may be vectorizeable with AVX gather instructions
@@ -296,7 +299,7 @@ inline __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
 	n1 = _mm_add_ps(n0, _mm_mul_ps(s, _mm_sub_ps(n1, n0)));
 	return _mm_mul_ps(scale, n1);
 
-	
+
 
 }
 
@@ -355,55 +358,100 @@ float noise(float x, float y, float z)
 	return 0.936f * (LERP(s, n0, n1));
 }
 
+//Fractal brownian motions using SIMD
+inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float gain, float lacunarity)
+{
+	__m128 sum, frequency, amplitude, vLacunarity, vGain, ampX, ampY, ampZ;
+
+	sum = _mm_set_ps(0, 0, 0, 0);
+	frequency = _mm_set_ps(1, 1, 1, 1);
+	amplitude = _mm_set_ps(1, 1, 1, 1);
+	vLacunarity = _mm_set_ps(lacunarity, lacunarity, lacunarity, lacunarity);
+	vGain = _mm_set_ps(gain, gain, gain, gain);
+
+	for (int i = 0; i < octaves; i++)
+	{
+		*x = _mm_mul_ps(*x, amplitude);
+		*y = _mm_mul_ps(*y, amplitude);
+		*z = _mm_mul_ps(*z, amplitude);
+		sum = _mm_add_ps(sum, _mm_mul_ps(frequency, noiseSIMD(x, y, z)));
+		frequency = _mm_div_ps(frequency, vLacunarity);
+		amplitude = _mm_mul_ps(amplitude, vGain);
+	}
+
+
+	return sum;
+}
 
 
 //---------------------------------------------------------------------
-int main()
+//Get noise on the surface of a sphere
+//This could be SIMD up as wel, but was not clear to me what cpus 
+//support SVML for the transcendental math. Not going to speed things up
+//much either.
+float* GetSphericalPerlinNoise(int width, int height, int octaves, int lacunarity, int gain,float stretch, float offsetx, float offsety)
 {
 	init();
-	float *result = (float*)_aligned_malloc(4096*4096*  sizeof(float), 16);
+	float *result = (float*)_aligned_malloc(width*height*  sizeof(float), 16);
 
-	float *VxStore = (float*)_aligned_malloc(4096 * 4096 * sizeof(float), 16);
-	float *VyStore = (float*)_aligned_malloc(4096 * 4096 * sizeof(float), 16);
-	float *VzStore = (float*)_aligned_malloc(4096 * 4096 * sizeof(float), 16);
+	float *VxStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
+	float *VyStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
+	float *VzStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
 
 
 	struct timeb start, end;
 	int diff;
-	int count = 0;
+	
+	//set up spherical stuff
+	int count = 0;	
+	float piOverHeight = pi / height;
+	float twoPiOverWidth = twopi / width;
+	float phi = 0;
+	float x3d, y3d, z3d;
+	float sinPhi, theta;
+
 	ftime(&start);
-
-
-	for (int i = 0; i < 5; i++)
+	for (int y = 0; y < height; y = y + 1)
 	{
-		for (int x = 0; x < 4096-4; x = x + 4)
+		phi = phi + piOverHeight;
+		z3d = cosf(phi)*stretch;
+		sinPhi = sinf(phi);
+		theta = 0;
+		for (int x = 0; x < width - 3; x = x + 4)
 		{
-			for (int y = 0; y < 4096-4; y = y + 4)
-			{
-				
-				for (int j = 0; j < 4; j++)
-				{
-				VxStore[x + j] = (x + j) / 4096.0;
-				VyStore[y + j] = (y + j) / 4096.0;
-				VzStore[x + j] = (x + j) / 4096.0;
-				}
-				_mm_store_ps(result+count*16, noiseSIMDStream((__m128*)&VxStore[x], (__m128*)&VyStore[y], (__m128*)&VzStore[x]));
-				count++;
-				
 
+			for (int j = 0; j < 4; j++)
+			{
+				theta = theta + twoPiOverWidth;
+				x3d = cosf(theta) * sinPhi;
+				y3d = sinf(theta) * sinPhi;
+				
+				VxStore[j] = x3d * 2 + offsetx;
+				VyStore[j] = y3d * 2 + offsety;
+				VzStore[j] = z3d;
 				
 			}
+			_mm_store_ps(&result[count], fbmSIMD((__m128*)VxStore, (__m128*)VyStore, (__m128*)VzStore, octaves, gain, lacunarity));
+			count = count + 4;
+
 		}
-		count = 0;
 	}
+
+
 
 	ftime(&end);
 	diff = (int)(1000.0 * (end.time - start.time)
 		+ (end.millitm - start.millitm));
 	diff = diff / 5;
-	printf("%d", diff);
+	printf("%d\n", diff);
+	printf("%f", result[1]);
 
 	char line[1024];
 	scanf("%[^\n]", line);
 	return 0;
+}
+
+int main()
+{
+	GetSphericalPerlinNoise(4096, 2048, 2, 2, 2, 0, 0, 0);
 }
