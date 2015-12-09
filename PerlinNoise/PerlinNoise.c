@@ -8,7 +8,6 @@
 #include <smmintrin.h>
 
 
-// Noise1234
 // Original Author: Stefan Gustavson (stegu@itn.liu.se)
 //
 // This library is public domain software, released by the author
@@ -39,10 +38,15 @@
 */
 
 
-/* Jack Mott - attempting to create a SIMD version*/
+/* Jack Mott - converted to SSE4 for 4x speedup*/
+
+
+//We use this union hack for easy
+//access to the floats for unvectorizeable
+//lookup table access
 union isimd {
-	__m128i m;    // SSE 4 x float vector
-	int a[4];  // scalar array of 4 floats
+	__m128i m;    
+	int a[4];	  
 };
 
 union fsimd {
@@ -55,7 +59,8 @@ union fsimd {
 __m128i one, two, four, eight, twelve, fourteen, fifteeni, ff;
 __m128 minusonef, zero, onef, six, fifteen, ten, scale;
 	
-// This is the new and improved, C(2) continuous interpolant
+
+// For non SIMD only
 #define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
 #define FASTFLOOR(x) ( ((x)>0) ? ((int)x) : ((int)x-1 ) )
 #define LERP(t, a, b) ((a) + (t)*((b)-(a)))
@@ -106,7 +111,7 @@ init()
 * A vector-valued noise over 3D accesses it 96 times, and a
 * float-valued 4D noise 64 times. We want this to fit in the cache!
 */
-static unsigned char perm[] = { 151,160,137,91,90,15,
+const unsigned char perm[] = { 151,160,137,91,90,15,
 131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
 190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
 88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
@@ -154,7 +159,7 @@ static unsigned char perm[] = { 151,160,137,91,90,15,
 * float SLnoise = (Noise1234::noise(x,y,z) + 1.0) * 0.5;
 */
 
-float grad(int hash, float x, float y, float z) {
+inline float grad(int hash, float x, float y, float z) {
 	int h = hash & 15;     // Convert low 4 bits of hash code into 12 simple
 	float u = h < 8 ? x : y; // gradient directions, and compute dot product.
 	float v = h < 4 ? y : h == 12 || h == 14 ? x : z; // Fix repeats at h = 12 to 15
@@ -162,7 +167,7 @@ float grad(int hash, float x, float y, float z) {
 }
 
 
-__m128  gradV(__m128i *hash, __m128 *x, __m128 *y, __m128 *z) {
+inline __m128  gradV(__m128i *hash, __m128 *x, __m128 *y, __m128 *z) {
 
 	__m128i h = _mm_and_si128(*hash, fifteeni);
 	__m128 h1 = _mm_cmpneq_ps(zero, _mm_castsi128_ps(_mm_and_si128(h, one)));
@@ -191,19 +196,17 @@ __m128  gradV(__m128i *hash, __m128 *x, __m128 *y, __m128 *z) {
 }
 
 
-__m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
+inline __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
 {
 	union isimd ix0, iy0, ix1, iy1, iz0, iz1;
 	__m128 fx0, fy0, fz0, fx1, fy1, fz1;
-
-	//	float nxy0, nxy1, nx0, nx1, n0, n1;
-
-		//todo fastfloat here if we want to handle negative input
+	
+	//mm_floor is the only SSE4 instruction
+	//you can get SSE2 compatbility by rolling your own floor
 	ix0.m = _mm_cvtps_epi32(_mm_floor_ps(*x));
 	iy0.m = _mm_cvtps_epi32(_mm_floor_ps(*y));
 	iz0.m = _mm_cvtps_epi32(_mm_floor_ps(*z));
-
-	__m128 test = _mm_cvtepi32_ps(ix0.m);
+	
 
 	fx0 = _mm_sub_ps(*x, _mm_cvtepi32_ps(ix0.m));
 	fy0 = _mm_sub_ps(*y, _mm_cvtepi32_ps(iy0.m));
@@ -246,6 +249,8 @@ __m128 noiseSIMDStream(__m128* x, __m128* y, __m128* z)
 			s = _mm_mul_ps(s, fx0);
 			s = _mm_mul_ps(s, fx0);
 
+
+	//This section may be vectorizeable with AVX gather instructions
 	union isimd p1, p2, p3, p4, p5, p6, p7, p8;
 	for (int i = 0; i < 4; i++)
 	{
