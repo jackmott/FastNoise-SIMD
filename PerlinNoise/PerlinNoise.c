@@ -39,7 +39,9 @@
 */
 
 
-/* Jack Mott - converted to SSE4 for 4x speedup*/
+/* Jack Mott - converted to SSE2/4 for 4x speedup and added 
+*  fractal brownian noise, also SSE enhanced
+*/
 
 
 //We use this union hack for easy
@@ -256,8 +258,8 @@ inline __m128 noiseSIMD(__m128* x, __m128* y, __m128* z)
 	s = _mm_mul_ps(s, fx0);
 
 
-	//This section may be vectorizeable with AVX gather instructions
-	//if you don't trust your compiler to unroll a loop this small
+	//This section may be vectorizeable with AVX gather instructions.
+	//If you don't trust your compiler to unroll a loop this small
 	//you could try unrolling it
 	union isimd p1, p2, p3, p4, p5, p6, p7, p8;
 	for (int i = 0; i < 4; i++)
