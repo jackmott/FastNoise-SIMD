@@ -62,6 +62,8 @@ union fsimd {
 __m128i one, two, four, eight, twelve, fourteen, fifteeni, ff;
 __m128 minusonef, zero, onef, six, fifteen, ten, scale;
 
+__m128 fbmOffset, fbmScale;
+
 const float pi = 3.14159265359;
 const float twopi = 6.2831853;
 
@@ -71,8 +73,35 @@ const float twopi = 6.2831853;
 #define LERP(t, a, b) ((a) + (t)*((b)-(a)))
 
 
-init()
+init(int octaves)
 {
+	switch (octaves)
+	{
+	case 1:
+		fbmOffset = _mm_set_ps(0, 0, 0, 0);
+		fbmScale = _mm_set_ps(1.066, 1.066, 1.066, 1.066);
+		break;
+	case 2:
+		fbmOffset = _mm_set_ps(.073, .073, .073, .073);
+		fbmScale = _mm_set_ps(.8584, .8584, .8584, .8584);
+		break;
+	case 3:
+		fbmOffset = _mm_set_ps(.1189, .1189, .1189, .1189);
+		fbmScale = _mm_set_ps(.8120, .8120, .8120, .8120);
+		break;
+	case 4:
+		fbmOffset = _mm_set_ps(.1440, .1440, .1440, .1440);
+		fbmScale = _mm_set_ps(.8083, .8083, .8083, .8083);
+		break;
+	case 5:
+		fbmOffset = _mm_set_ps(.1530, .1530, .1530, .1530);
+		fbmScale = _mm_set_ps(.8049, .8049, .8049, .8049);
+		break;
+	default:
+		fbmOffset = _mm_set_ps(.16, .16, .16, .16);
+		fbmScale = _mm_set_ps(.8003, .8003, .8003, .8003);
+	}
+
 	//integer constants	
 	one = _mm_set_epi32(1, 1, 1, 1);
 	two = _mm_set_epi32(2, 2, 2, 2);
@@ -231,22 +260,22 @@ inline __m128 noiseSIMD(__m128* x, __m128* y, __m128* z)
 
 
 	__m128
-		r = _mm_mul_ps(fz0, six);
-	r = _mm_sub_ps(r, fifteen);
-	r = _mm_mul_ps(r, fz0);
-	r = _mm_add_ps(r, ten);
-	r = _mm_mul_ps(r, fz0);
-	r = _mm_mul_ps(r, fz0);
-	r = _mm_mul_ps(r, fz0);
+		r1 = _mm_mul_ps(fz0, six);
+	__m128 r2 = _mm_sub_ps(r1, fifteen);
+	__m128 r3 = _mm_mul_ps(r2, fz0);
+	__m128 r4 = _mm_add_ps(r3, ten);
+	__m128 r5 = _mm_mul_ps(r4, fz0);
+	__m128 r6 = _mm_mul_ps(r5, fz0);
+	__m128 r = _mm_mul_ps(r6, fz0);
 
 	__m128
-		t = _mm_mul_ps(fy0, six);
-	t = _mm_sub_ps(t, fifteen);
-	t = _mm_mul_ps(t, fy0);
-	t = _mm_add_ps(t, ten);
-	t = _mm_mul_ps(t, fy0);
-	t = _mm_mul_ps(t, fy0);
-	t = _mm_mul_ps(t, fy0);
+		t1 = _mm_mul_ps(fy0, six);
+	__m128 t2 = _mm_sub_ps(t1, fifteen);
+	__m128 t3 = _mm_mul_ps(t2, fy0);
+	__m128 t4 = _mm_add_ps(t3, ten);
+	__m128 t5 = _mm_mul_ps(t4, fy0);
+	__m128 t6 = _mm_mul_ps(t5, fy0);
+	__m128 t = _mm_mul_ps(t6, fy0);
 
 	__m128
 		s = _mm_mul_ps(fx0, six);
@@ -360,17 +389,33 @@ float noise(float x, float y, float z)
 	return 0.936f * (LERP(s, n0, n1));
 }
 
+
+inline float fbm(float x, float y, float z, int octaves, float gain, float lacunarity)
+{
+	float sum = 0;
+	float frequency = 1;
+	float amplitude = 1;
+
+	for (int i = 0; i < octaves; i++)
+	{
+		sum += noise(x, y, z)*frequency;
+		frequency /= lacunarity;
+		amplitude *= gain;
+
+	}
+	return sum;
+}
 //Fractal brownian motions using SIMD
 inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float gain, float lacunarity)
 {
 	__m128 sum, frequency, amplitude, vLacunarity, vGain, ampX, ampY, ampZ;
 
-	sum = _mm_set_ps(0, 0, 0, 0);
+	
 	frequency = _mm_set_ps(1, 1, 1, 1);
 	amplitude = _mm_set_ps(1, 1, 1, 1);
 	vLacunarity = _mm_set_ps(lacunarity, lacunarity, lacunarity, lacunarity);
 	vGain = _mm_set_ps(gain, gain, gain, gain);
-
+	sum = _mm_set_ps(0, 0, 0, 0);
 	for (int i = 0; i < octaves; i++)
 	{
 		*x = _mm_mul_ps(*x, amplitude);
@@ -382,7 +427,7 @@ inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float gain, 
 	}
 
 
-	return sum;
+	return  _mm_mul_ps(_mm_add_ps(sum, fbmOffset), fbmScale);
 }
 
 
@@ -393,12 +438,12 @@ inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float gain, 
 //much either.
 float* GetSphericalPerlinNoise(int width, int height, int octaves, int lacunarity, int gain,float stretch, float offsetx, float offsety)
 {
-	init();
+	init(octaves);
 	float *result = (float*)_aligned_malloc(width*height*  sizeof(float), 16);
 
-	float *VxStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
-	float *VyStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
-	float *VzStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
+	union fsimd vX;
+	union fsimd vY;
+	union fsimd vZ;
 
 
 	struct timeb start, end;
@@ -413,29 +458,49 @@ float* GetSphericalPerlinNoise(int width, int height, int octaves, int lacunarit
 	float sinPhi, theta;
 
 	ftime(&start);
+
+	__m128 sum, vFrequency, vAmplitude, vLacunarity, vGain;	
+	vLacunarity = _mm_set_ps(lacunarity, lacunarity, lacunarity, lacunarity);
+	vGain = _mm_set_ps(gain, gain, gain, gain);
+	
 	for (int y = 0; y < height; y = y + 1)
 	{
 		phi = phi + piOverHeight;
 		z3d = cosf(phi)*stretch;
 		sinPhi = sinf(phi);
 		theta = 0;
-		for (int x = 0; x < width - 3; x = x + 4)
+		for (int x = 0; x < width-3 ; x = x + 4)
 		{
-
+			
 			for (int j = 0; j < 4; j++)
 			{
 				theta = theta + twoPiOverWidth;
 				x3d = cosf(theta) * sinPhi;
 				y3d = sinf(theta) * sinPhi;
-				
-				VxStore[j] = x3d * 2 + offsetx;
-				VyStore[j] = y3d * 2 + offsety;
-				VzStore[j] = z3d;
-				
+								
+				vX.a[j] = x3d * 2 + offsetx; 
+				vY.a[j] = y3d * 2 + offsety;
+				vZ.a[j] = z3d;								
 			}
-			_mm_store_ps(&result[count], fbmSIMD((__m128*)VxStore, (__m128*)VyStore, (__m128*)VzStore, octaves, gain, lacunarity));
-			count = count + 4;
+			
+			sum = _mm_setzero_ps();
+			vFrequency = _mm_set1_ps(1);
+			vAmplitude = _mm_set1_ps(1);								 
+			for (int i = 0; i < octaves; i++)
+			{
+				vX.m = _mm_mul_ps(vX.m, vAmplitude);
+				vY.m = _mm_mul_ps(vY.m, vAmplitude);
+				vZ.m = _mm_mul_ps(vZ.m, vAmplitude);
+				sum = _mm_add_ps(sum, _mm_mul_ps(vFrequency, noiseSIMD(&vX.m, &vY.m, &vZ.m)));
+				vFrequency = _mm_div_ps(vFrequency, vLacunarity);
+				vAmplitude = _mm_mul_ps(vAmplitude, vGain);
+			}
+			
+			_mm_store_ps(&result[count], _mm_mul_ps(_mm_add_ps(sum, fbmOffset), fbmScale) );
+			count = count + 4;			
 
+			//result[count] = fbm(x, y, x, octaves, gain, lacunarity);
+			//count++;
 		}
 	}
 
@@ -444,9 +509,9 @@ float* GetSphericalPerlinNoise(int width, int height, int octaves, int lacunarit
 	ftime(&end);
 	diff = (int)(1000.0 * (end.time - start.time)
 		+ (end.millitm - start.millitm));
-	diff = diff / 5;
+	
 	printf("%d\n", diff);
-	printf("%f", result[1]);
+	printf("%f", result[0]);
 
 	char line[1024];
 	scanf("%[^\n]", line);
@@ -455,5 +520,5 @@ float* GetSphericalPerlinNoise(int width, int height, int octaves, int lacunarit
 
 int main()
 {
-	GetSphericalPerlinNoise(4096, 2048, 2, 2, 2, 0, 0, 0);
+	GetSphericalPerlinNoise(4096, 4096, 1, 1, 1, 1, 0, 0);
 }

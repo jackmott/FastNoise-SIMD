@@ -1,4 +1,5 @@
 #include "PerlinNoise.h"
+#include <stdio.h>
 #include <math.h>
 #include <xmmintrin.h>
 #include <emmintrin.h> 
@@ -35,7 +36,7 @@
 */
 
 
-/* Jack Mott - converted to SSE2/4 for 4x speedup and added 
+/* Jack Mott - converted to SSE2/4 for 4x speedup and added
 *  fractal brownian noise, also SSE enhanced
 */
 
@@ -59,11 +60,11 @@ __m128i one, two, four, eight, twelve, fourteen, fifteeni, ff;
 __m128 minusonef, zero, onef, six, fifteen, ten, scale;
 
 
-__m128 fbmOffset,fbmScale;
 
 
-const float pi = 3.14159265359;
-const float twopi = 6.2831853;
+
+const float pi = 3.14159265359f;
+const float twopi = 6.2831853f;
 
 
 // For non SIMD only
@@ -74,54 +75,27 @@ const float twopi = 6.2831853;
 
 void init(int octaves)
 {
-	//scaling and offset factor to clamp fbm to [0..1] (approximately)
-	switch (octaves)
-	{
-	case 1:
-		fbmOffset = _mm_set_ps(0, 0, 0, 0);
-		fbmScale = _mm_set_ps(1.066, 1.066, 1.066, 1.066);
-		break;
-	case 2:
-		fbmOffset = _mm_set_ps(.073, .073, .073, .073);
-		fbmScale = _mm_set_ps(.8584, .8584, .8584, .8584);
-		break;
-	case 3:
-		fbmOffset = _mm_set_ps(.1189, .1189, .1189, .1189);
-		fbmScale = _mm_set_ps(.8120, .8120, .8120, .8120);
-		break;
-	case 4:
-		fbmOffset = _mm_set_ps(.1440, .1440, .1440, .1440);
-		fbmScale = _mm_set_ps(.8083, .8083, .8083, .8083);
-		break;
-	case 5:
-		fbmOffset = _mm_set_ps(.1530, .1530, .1530, .1530);
-		fbmScale = _mm_set_ps(.8049, .8049, .8049, .8049);
-		break;
-	default:
-		fbmOffset = _mm_set_ps(0, 0, 0, 0);
-		fbmScale = _mm_set_ps(1.066, 1.066, 1.066, 1.066);
-	}
-
+	
 	//integer constants	
-	one = _mm_set_epi32(1, 1, 1, 1);
-	two = _mm_set_epi32(2, 2, 2, 2);
-	four = _mm_set_epi32(4, 4, 4, 4);
-	eight = _mm_set_epi32(8, 8, 8, 8);
-	twelve = _mm_set_epi32(12, 12, 12, 12);
-	fourteen = _mm_set_epi32(14, 14, 14, 14);
-	fifteeni = _mm_set_epi32(15, 15, 15, 15);
-	ff = _mm_set_epi32(0xff, 0xff, 0xff, 0xff);
+	one = _mm_set1_epi32(1);
+	two = _mm_set1_epi32(2);
+	four = _mm_set1_epi32(4);
+	eight = _mm_set1_epi32(8);
+	twelve = _mm_set1_epi32(12);
+	fourteen = _mm_set1_epi32(14);
+	fifteeni = _mm_set1_epi32(15);
+	ff = _mm_set1_epi32(0xff);
 
 	//float constants
-	minusonef = _mm_set_ps(-1, -1, -1, -1);
-	zero = _mm_setr_ps(0, 0, 0, 0);
-	onef = _mm_set_ps(1, 1, 1, 1);
-	six = _mm_set_ps(6, 6, 6, 6);
-	ten = _mm_set_ps(10, 10, 10, 10);
-	fifteen = _mm_set_ps(15, 15, 15, 15);
+	minusonef = _mm_set1_ps(-1);
+	zero = _mm_setzero_ps();
+	onef = _mm_set1_ps(1);
+	six = _mm_set1_ps(6);
+	ten = _mm_set1_ps(10);
+	fifteen = _mm_set1_ps(15);
 
 	//final scaling constant
-	scale = _mm_set_ps(.936, .936, .936, .936);
+	scale = _mm_set1_ps(.936f);
 
 }
 
@@ -287,10 +261,8 @@ inline __m128 noiseSIMD(__m128* x, __m128* y, __m128* z)
 	s = _mm_mul_ps(s, fx0);
 
 
-	//This section may be vectorizeable with AVX gather instructions.
-	//If you don't trust your compiler to unroll a loop this small
-	//you could try unrolling it
-	union isimd p1, p2, p3, p4, p5, p6, p7, p8;
+	//This section may be vectorizeable with AVX gather instructions.	
+	union isimd p1, p2, p3, p4, p5, p6, p7, p8;	
 	for (int i = 0; i < 4; i++)
 	{
 		p1.a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
@@ -390,32 +362,59 @@ float noise(float x, float y, float z)
 }
 
 //Fractal brownian motions using SIMD
-inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float lacunarity, float gain)
+inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, __m128* vLacunarity, __m128* vGain)
 {
-	__m128 sum, frequency, amplitude, vLacunarity, vGain, ampX, ampY, ampZ;
-
-	sum = _mm_set_ps(0, 0, 0, 0);
-	frequency = _mm_set_ps(1, 1, 1, 1);
-	amplitude = _mm_set_ps(1, 1, 1, 1);
-	vLacunarity = _mm_set_ps(lacunarity, lacunarity, lacunarity, lacunarity);
-	vGain = _mm_set_ps(gain, gain, gain, gain);
-
+	__m128 sum, frequency, amplitude;
+	sum = _mm_setzero_ps();
+	frequency = _mm_set1_ps(1);
+	amplitude = _mm_set1_ps(1);
 	for (int i = 0; i < octaves; i++)
 	{
 		*x = _mm_mul_ps(*x, amplitude);
 		*y = _mm_mul_ps(*y, amplitude);
 		*z = _mm_mul_ps(*z, amplitude);
 		sum = _mm_add_ps(sum, _mm_mul_ps(frequency, noiseSIMD(x, y, z)));
-		frequency = _mm_div_ps(frequency, vLacunarity);
-		amplitude = _mm_mul_ps(amplitude, vGain);
+		frequency = _mm_div_ps(frequency, *vLacunarity);
+		amplitude = _mm_mul_ps(amplitude, *vGain);
 	}
 
 
-	return _mm_mul_ps(_mm_add_ps(sum, fbmOffset), fbmScale);
-		
+	return sum;
 
 }
 
+
+//To scale output to [0..1]
+inline void SetUpOffsetScale(int octaves, __m128* fbmOffset, __m128* fbmScale)
+{
+	switch (octaves)
+	{
+	case 1:
+		*fbmOffset = _mm_setzero_ps();
+		*fbmScale = _mm_set1_ps(1.066f);
+		break;
+	case 2:
+		*fbmOffset = _mm_set1_ps(.073f);
+		*fbmScale = _mm_set1_ps(.8584f);
+		break;
+	case 3:
+		*fbmOffset = _mm_set1_ps(.1189f);
+		*fbmScale = _mm_set1_ps(.8120f);
+		break;
+	case 4:
+		*fbmOffset = _mm_set1_ps(.1440f);
+		*fbmScale = _mm_set1_ps(.8083f);
+		break;
+	case 5:
+		*fbmOffset = _mm_set1_ps(.1530f);
+		*fbmScale = _mm_set1_ps(.8049f);
+		break;
+	default:
+		*fbmOffset = _mm_set1_ps(.16f);
+		*fbmScale = _mm_set1_ps(.8003f);
+	}
+
+}
 
 //---------------------------------------------------------------------
 //Get noise on the surface of a sphere
@@ -425,30 +424,35 @@ inline __m128 fbmSIMD(__m128 *x, __m128 *y, __m128 *z, int octaves, float lacuna
 extern "C" {
 	void CleanUpSphericalPerlinNoise(float * resultArray)
 	{
-		_aligned_free(resultArray);		
+		_aligned_free(resultArray);
 	}
 
 	float* GetSphericalPerlinNoise(int width, int height, int octaves, float lacunarity, float gain, float stretch, float offsetx, float offsety)
 	{
 		init(octaves);
-		float *result = (float*)_aligned_malloc(width*height*  sizeof(float), 16);
-		float *VxStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
-		float *VyStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
-		float *VzStore = (float*)_aligned_malloc(4 * sizeof(float), 16);
 
-		
+		float *result = (float*)_aligned_malloc(width*height*  sizeof(float), 16);
+
+		//Does this keep vx/vy/vz closer together in memory? os ir this stupid?
+		float *VxStore = (float*)_aligned_malloc(3 * 4 * sizeof(float), 16);
+		float *VyStore = VxStore + 4;
+		float *VzStore = VxStore + 8;
+
+
 		//set up spherical stuff
 		int count = 0;
-		float piOverHeight = pi / height;
-		float twoPiOverWidth = twopi / width;
+		const float piOverHeight = pi / height;
+		const float twoPiOverWidth = twopi / width;
 		float phi = 0;
 		float x3d, y3d, z3d;
 		float sinPhi, theta;
 
-		float min = 9999;
-		float max = -9999;
-
+		__m128 fbmOffset, fbmScale;
+		SetUpOffsetScale(octaves,&fbmOffset, &fbmScale);
 		
+		__m128 vGain = _mm_set1_ps(gain);
+		__m128 vLacunarity = _mm_set1_ps(lacunarity);
+
 		for (int y = 0; y < height; y = y + 1)
 		{
 			phi = phi + piOverHeight;
@@ -466,19 +470,22 @@ extern "C" {
 
 					VxStore[j] = x3d * 2 + offsetx;
 					VyStore[j] = y3d * 2 + offsety;
-					VzStore[j] = z3d;
+					VzStore[j] = z3d * 2;
 
 				}
-				_mm_store_ps(&result[count], fbmSIMD((__m128*)VxStore, (__m128*)VyStore, (__m128*)VzStore, octaves, gain, lacunarity));
+				__m128 r = fbmSIMD((__m128*)VxStore, (__m128*)VyStore, (__m128*)VzStore, octaves, &vGain, &vLacunarity);				
+				_mm_store_ps(&result[count], _mm_mul_ps(_mm_add_ps(r,fbmOffset),fbmScale));
 				count = count + 4;
 
 			}
 		}
-		_aligned_free(VxStore);
-		_aligned_free(VyStore);
-		_aligned_free(VzStore);
+		_aligned_free(VxStore);		
 		return result;
-	
+
 	}
+
+
+
+
 }
 
