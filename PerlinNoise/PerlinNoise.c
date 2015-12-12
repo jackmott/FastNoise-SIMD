@@ -47,8 +47,8 @@
 #define LERP(t, a, b) ((a) + (t)*((b)-(a)))
 
 #define SSE2  //indicates we want SSE2
-#define SSE42 //indicates we want SSE4.2 instructions (floor is available)
-#define AVX2 //indicates we want AVX2 instructions (gather is available)
+#define SSE41 //indicates we want SSE4.1 instructions (floor is available)
+#define AVX2 //indicates we want AVX2 instructions (double speed!)
 
 
 //creat types we can use in either the 128 or 256 case
@@ -56,8 +56,37 @@
 typedef __m128 SIMD;
 typedef __m128i SIMDi;
 #define VECTOR_SIZE 4
-#define SetOne(x) _mmSetOne_ps(x)
-
+#define Store(x,y) _mm_store_ps(x,y)
+#define SetOne(x) _mm_set1_ps(x)
+#define SetZero() _mm_setzero_ps()
+#define SetOnei(x) _mm_set1_epi32(x)
+#define SetZeroi(x) _mm_setzero_epi32(x)
+#define Add(x,y) _mm_add_ps(x,y)
+#define Sub(x,y) _mm_sub_ps(x,y)
+#define Addi(x,y) _mm_add_epi32(x,y)
+#define Subi(x,y) _mm_sub_epi32(x,y)
+#define Mul(x,y) _mm_mul_ps(x,y)
+#define Muli(x,y) _mm_mul_epi32(x,y)
+#define And(x,y) _mm_and_ps(x,y)
+#define Andi(x,y) _mm_and_si128(x,y)
+#define AndNot(x,y) _mm_andnot_ps(x,y)
+#define AndNoti(x,y) _mm_andnot_epi32(x,y)
+#define Or(x,y) _mm_or_ps(x,y)
+#define Ori(x,y) _mm_or_si128(x,y)
+#define CastToFloat(x) _mm_castsi128_ps(x)
+#define CastToInt(x) _mm_castps_si128(x)
+#define ConvertToInt(x) _mm_cvtps_epi32(x)
+#define ConvertToFloat(x) _mm_cvtepi32_ps(x)
+#define Equal(x,y)  _mm_cmpeq_ps(x,y) 
+#define Equali(x,y) _mm_cmpeq_epi32(x,y)
+#define GreaterThan(x,y) _mm_cmpgt_ps(x,y)
+#define GreaterThani(x,y) _mm_cmpgt_epi32(x,y)
+#define LessThan(x,y) _mm_cmplt_ps(x,y)
+#define LessThani(x,y) _mm_cmpgt_epi32(y,x) 
+#define NotEqual(x,y) _mm_cmpneq_ps(x,y)
+#define Floor(x) _mm_floor_ps(x)
+#define Max(x,y) _mm_max_ps(x,y)
+#define Maxi(x,y) _mm_max_epi32(x,y)
 #endif
 #ifdef AVX2
 typedef __m256 SIMD;
@@ -94,7 +123,7 @@ typedef __m256i SIMDi;
 #define Floor(x) _mm256_floor_ps(x)
 #define Max(x,y) _mm256_max_ps(x,y)
 #define Maxi(x,y) _mm256_max_epi32(x,y)
-
+#define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
 #endif
 
 //We use this union hack for easy
@@ -201,10 +230,10 @@ inline void SetUpOffsetScale(int octaves, SIMD* fbmOffset, SIMD* fbmScale)
 * A vector-valued noise over 3D accesses it 96 times, and a
 * float-valued 4D noise 64 times. We want this to fit in the cache!
 */
-#ifndef AVX2
+#ifndef AVX2ff
 const unsigned char perm[] = 
 #endif
-#ifdef AVX2
+#ifdef AVX2ff
 const uint32_t perm[] =
 #endif
 { 151,160,137,91,90,15,
@@ -297,12 +326,24 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	union uSIMDi ix0, iy0, ix1, iy1, iz0, iz1;
 	SIMD fx0, fy0, fz0, fx1, fy1, fz1;
 
-	//mm_floor is the only SSE4 instruction
-	//you can get SSE2 compatbility by rolling your own floor
+	//use built in floor if we have it
+#ifdef SSE41
 	ix0.m = ConvertToInt(Floor(*x));
 	iy0.m = ConvertToInt(Floor(*y));
 	iz0.m = ConvertToInt(Floor(*z));
-
+#endif
+	//drop out to scalar if we don't
+#ifndef SSE41
+	union uSIMD* ux = x;
+	union uSIMD* uy = y;
+	union uSIMD* uz = z;
+	for (int i = 0; i < VECTOR_SIZE; i++)
+	{
+		ix0.a[i] = FASTFLOOR((*ux).a[i]);
+		iy0.a[i] = FASTFLOOR((*uy).a[i]);
+		iz0.a[i] = FASTFLOOR((*uz).a[i]);
+	}
+#endif
 
 	fx0 = Sub(*x, ConvertToFloat(ix0.m));
 	fy0 = Sub(*y, ConvertToFloat(iy0.m));
@@ -349,7 +390,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	s = Mul(s, fx0);
 
 	union uSIMDi p1, p2, p3, p4, p5, p6, p7, p8;
-#ifndef AVXff
+#ifndef USEGATHER
 	
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
@@ -364,40 +405,40 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 
 	}
 #endif // !AVX
-#ifdef AVX2ff
+#ifdef USEGATHER // This sems to be slower on early AVX cpus (Which is all cpus as of 2015)
 	SIMDi pz0, pz1, pz0y0, pz0y1, pz1y1, pz1y0;
 
-	pz0 = _mm_i32gather_epi32(perm, iz0.m, 4);
-	pz1 = _mm_i32gather_epi32(perm, iz1.m, 4);
+	pz0 = Gather(perm, iz0.m, 4);
+	pz1 = Gather(perm, iz1.m, 4);
 	
-	pz0y0 = _mm_i32gather_epi32(perm, Addi(iy0.m, pz0), 4);
-	pz0y1 = _mm_i32gather_epi32(perm, Addi(iy1.m, pz0), 4);
-	pz1y0 = _mm_i32gather_epi32(perm, Addi(iy0.m, pz1), 4);
-	pz1y1 = _mm_i32gather_epi32(perm, Addi(iy1.m, pz1), 4);
+	pz0y0 = Gather(perm, Addi(iy0.m, pz0), 4);
+	pz0y1 = Gather(perm, Addi(iy1.m, pz0), 4);
+	pz1y0 = Gather(perm, Addi(iy0.m, pz1), 4);
+	pz1y1 = Gather(perm, Addi(iy1.m, pz1), 4);
 
 	p1.m = Addi(ix0.m,pz0y0);
-	p1.m = _mm_i32gather_epi32(perm, p1.m, 4);
+	p1.m = Gather(perm, p1.m, 4);
 
 	p2.m = Addi(ix0.m, pz1y0);
-	p2.m = _mm_i32gather_epi32(perm, p2.m, 4);
+	p2.m = Gather(perm, p2.m, 4);
 
 	p3.m = Addi(ix0.m,pz0y1);
-	p3.m = _mm_i32gather_epi32(perm, p3.m, 4);
+	p3.m = Gather(perm, p3.m, 4);
 
 	p4.m = Addi(ix0.m, pz1y1);
-	p4.m = _mm_i32gather_epi32(perm, p4.m, 4);
+	p4.m = Gather(perm, p4.m, 4);
 
 	p5.m = Addi(ix1.m, pz0y0);
-	p5.m = _mm_i32gather_epi32(perm, p5.m, 4);
+	p5.m = Gather(perm, p5.m, 4);
 
 	p6.m = Addi(ix1.m, pz1y0);
-	p6.m = _mm_i32gather_epi32(perm, p6.m, 4);
+	p6.m = Gather(perm, p6.m, 4);
 
 	p7.m = Addi(ix1.m, pz0y1);
-	p7.m = _mm_i32gather_epi32(perm, p7.m, 4);
+	p7.m = Gather(perm, p7.m, 4);
 
 	p8.m = Addi(ix1.m, pz1y1);
-	p8.m = _mm_i32gather_epi32(perm, p8.m, 4);
+	p8.m = Gather(perm, p8.m, 4);
 
 
 #endif // AVX
