@@ -64,6 +64,7 @@ typedef __m128i SIMDi;
 
 //intrinsic functions
 #define Store(x,y) _mm_store_ps(x,y)
+#define Load(x) _mm256_load_ps(x)
 #define SetOne(x) _mm_set1_ps(x)
 #define SetZero() _mm_setzero_ps()
 #define SetOnei(x) _mm_set1_epi32(x)
@@ -106,6 +107,7 @@ typedef __m256i SIMDi;
 
 //intrinsic functions
 #define Store(x,y) _mm256_store_ps(x,y)
+#define Load(x) _mm256_load_ps(x)
 #define SetOne(x) _mm256_set1_ps(x)
 #define SetZero() _mm256_setzero_ps()
 #define SetOnei(x) _mm256_set1_epi32(x)
@@ -545,17 +547,17 @@ float noise(float x, float y, float z)
 //Fractal brownian motions using SIMD
 inline void fbmSIMD(SIMD* out, Settings* S )
 {
-	SIMD amplitude, vFrequency;
+	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(0.5f);
-	vFrequency = Add(S->frequency, zero);
-	for (int i = 0; i < S->octaves; i++)
+	localFrequency = Load(&S->frequency);
+	for (int i = S->octaves; i != 0 ; i--)
 	{		
-		SIMD vfx = Mul(S->x.m, vFrequency);
-		SIMD vfy = Mul(S->y.m, vFrequency);
-		SIMD vfz = Mul(S->z.m, vFrequency);
+		SIMD vfx = Mul(S->x.m, localFrequency);
+		SIMD vfy = Mul(S->y.m, localFrequency);
+		SIMD vfz = Mul(S->z.m, localFrequency);
 		*out = Add(*out, Mul(amplitude, noiseSIMD(&vfx, &vfy, &vfz)));
-		vFrequency = Mul(vFrequency, S->lacunarity);
+		localFrequency = Mul(localFrequency, S->lacunarity);
 		amplitude = Mul(amplitude, S->gain);
 	}
 	
@@ -567,7 +569,7 @@ inline float fbm(float x, float y, float z, float lacunarity, float gain, float 
 {
 	float sum = 0;
 	float amplitude = 0.5;	
-	for (int i = 0; i < octaves; i++)
+	for (int i = octaves; i != 0; i--)
 	{
 		sum += noise(x*frequency, y*frequency, z*frequency)*amplitude;
 		frequency *= lacunarity;
@@ -583,8 +585,8 @@ inline void turbulenceSIMD(SIMD* out, Settings* S)
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
-	localFrequency = Add(S->frequency, zero);
-	for (int i = 0; i < S->octaves; i++)
+	localFrequency = Load(&S->frequency);
+	for (int i = S->octaves; i != 0; i--)
 	{		
 		SIMD r = Mul(amplitude, noiseSIMD(&S->x.m, &S->y.m, &S->z.m));
 		//get abs of r by trickery
@@ -600,7 +602,7 @@ inline float turbulence(float x, float y, float z, float lacunarity, float gain,
 {
 	float sum = 0;
 	float amplitude = 1;
-	for (int i = 0; i < octaves; i++)
+	for (int i = octaves; i != 0; i--)
 	{
 		sum += (float)fabs(noise(x*frequency, y*frequency, z*frequency)*amplitude);
 		frequency *= lacunarity;
@@ -616,8 +618,8 @@ inline void ridgeSIMD(SIMD* out, Settings* S)
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
 	prev = SetOne(1.0f);
-	localFrequency = Add(S->frequency, zero);
-	for (int i = 0; i < S->octaves; i++)
+	localFrequency = Load(&S->frequency);
+	for (int i = S->octaves; i != 0; i--)
 	{		
 		SIMD r = noiseSIMD(&S->x.m, &S->y.m, &S->z.m);
 		//get abs of r by trickery
@@ -638,7 +640,7 @@ inline float ridge(float x, float y, float z, float lacunarity, float gain, floa
 	float sum = 0;
 	float amplitude = 0.5f;
 	float prev = 1.0f;
-	for (int i = 0; i < octaves; i++)
+	for (int i = octaves; i != 0; i--)
 	{
 		float r = (float)fabs(noise(x*frequency, y*frequency, z*frequency));
 		r = offset - r;
