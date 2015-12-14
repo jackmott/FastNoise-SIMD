@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include "FastNoise.h"
 
+
+
+SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
+SIMD minusonef, zero, onef, six, fifteen, ten, scale;
+
 void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves)
 {
 	S->frequency = SetOne(frequency);
@@ -37,40 +42,6 @@ void initSIMD(Settings *S, float frequency, float lacunarity, float offset, floa
 }
 
 
-#ifndef USEGATHER
-const unsigned char perm[] =
-#endif
-#ifdef USEGATHER
-const int32_t perm[] =
-#endif
-{ 151,160,137,91,90,15,
-131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
-190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
-88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
-77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
-102,143,54, 65,25,63,161, 1,216,80,73,209,76,132,187,208, 89,18,169,200,196,
-135,130,116,188,159,86,164,100,109,198,173,186, 3,64,52,217,226,250,124,123,
-5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,
-223,183,170,213,119,248,152, 2,44,154,163, 70,221,153,101,155,167, 43,172,9,
-129,22,39,253, 19,98,108,110,79,113,224,232,178,185, 112,104,218,246,97,228,
-251,34,242,193,238,210,144,12,191,179,162,241, 81,51,145,235,249,14,239,107,
-49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
-138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180,
-151,160,137,91,90,15,
-131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
-190, 6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,
-88,237,149,56,87,174,20,125,136,171,168, 68,175,74,165,71,134,139,48,27,166,
-77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,
-102,143,54, 65,25,63,161, 1,216,80,73,209,76,132,187,208, 89,18,169,200,196,
-135,130,116,188,159,86,164,100,109,198,173,186, 3,64,52,217,226,250,124,123,
-5,202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,
-223,183,170,213,119,248,152, 2,44,154,163, 70,221,153,101,155,167, 43,172,9,
-129,22,39,253, 19,98,108,110,79,113,224,232,178,185, 112,104,218,246,97,228,
-251,34,242,193,238,210,144,12,191,179,162,241, 81,51,145,235,249,14,239,107,
-49,192,214, 31,181,199,106,157,184, 84,204,176,115,121,50,45,127, 4,150,254,
-138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
-};
-
 //---------------------------------------------------------------------
 
 /*
@@ -99,7 +70,7 @@ inline float grad(int hash, float x, float y, float z) {
 }
 
 
-inline SIMD  gradV(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
+inline SIMD  gradSIMD(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 
 	SIMDi h = Andi(*hash, fifteeni);
 	SIMD h1 = ConvertToFloat(Equali(zeroi, Andi(h, one)));
@@ -126,7 +97,7 @@ inline SIMD  gradV(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 
 inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 {
-	union uSIMDi ix0, iy0, ix1, iy1, iz0, iz1;
+	uSIMDi ix0, iy0, ix1, iy1, iz0, iz1;
 	SIMD fx0, fy0, fz0, fx1, fy1, fz1;
 
 	//use built in floor if we have it
@@ -137,9 +108,9 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 #endif
 	//drop out to scalar if we don't
 #ifndef SSE41
-	union uSIMD* ux = x;
-	union uSIMD* uy = y;
-	union uSIMD* uz = z;
+	uSIMD* ux = x;
+	uSIMD* uy = y;
+	uSIMD* uz = z;
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
 		ix0.a[i] = FASTFLOOR((*ux).a[i]);
@@ -193,7 +164,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	s = Mul(s, fx0);
 
 
-	union uSIMDi p[8];
+	uSIMDi p[8];
 #ifndef USEGATHER
 
 	for (int i = 0; i < VECTOR_SIZE; i++)
@@ -248,22 +219,22 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 #endif // AVX
 
 
-	SIMD nxy0 = gradV(&p[0].m, &fx0, &fy0, &fz0);
-	SIMD nxy1 = gradV(&p[1].m, &fx0, &fy0, &fz1);
+	SIMD nxy0 = gradSIMD(&p[0].m, &fx0, &fy0, &fz0);
+	SIMD nxy1 = gradSIMD(&p[1].m, &fx0, &fy0, &fz1);
 	SIMD nx0 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
-	nxy0 = gradV(&p[2].m, &fx0, &fy1, &fz0);
-	nxy1 = gradV(&p[3].m, &fx0, &fy1, &fz1);
+	nxy0 = gradSIMD(&p[2].m, &fx0, &fy1, &fz0);
+	nxy1 = gradSIMD(&p[3].m, &fx0, &fy1, &fz1);
 	SIMD nx1 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
 	SIMD n0 = Add(nx0, Mul(t, Sub(nx1, nx0)));
 
-	nxy0 = gradV(&p[4].m, &fx1, &fy0, &fz0);
-	nxy1 = gradV(&p[5].m, &fx1, &fy0, &fz1);
+	nxy0 = gradSIMD(&p[4].m, &fx1, &fy0, &fz0);
+	nxy1 = gradSIMD(&p[5].m, &fx1, &fy0, &fz1);
 	nx0 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
-	nxy0 = gradV(&p[6].m, &fx1, &fy1, &fz0);
-	nxy1 = gradV(&p[7].m, &fx1, &fy1, &fz1);
+	nxy0 = gradSIMD(&p[6].m, &fx1, &fy1, &fz0);
+	nxy1 = gradSIMD(&p[7].m, &fx1, &fy1, &fz1);
 	nx1 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
 	SIMD n1 = Add(nx0, Mul(t, Sub(nx1, nx0)));
@@ -401,7 +372,7 @@ inline void turbulenceSIMD(SIMD* out, Settings* S)
 
 }
 
-inline float turbulence(float x, float y, float z, float lacunarity, float gain, float frequency, float offset, int octaves)
+inline float turbulence(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
 {
 	float sum = 0;
 	float amplitude = 1;
@@ -438,7 +409,7 @@ inline void ridgeSIMD(SIMD* out, Settings* S)
 
 }
 
-inline float ridge(float x, float y, float z, float lacunarity, float gain, float frequency, float offset, int octaves)
+inline float ridge(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
 {
 	float sum = 0;
 	float amplitude = 0.5f;
@@ -455,108 +426,6 @@ inline float ridge(float x, float y, float z, float lacunarity, float gain, floa
 	return sum;
 }
 
-
-//Must be called by the caller of noise producing functions
-void CleanUpSIMDNoise(float * resultArray)
-{
-	_aligned_free(resultArray);
-}
-
-//Must be called by the caller of noise producing functions
-void CleanUpNoise(float * resultArray)
-{
-	free(resultArray);
-}
-
-float* GetSpherSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, ISIMDNoise noise)
-{
-	Settings S;
-	initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
-
-	SIMD* result = (SIMD*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
-
-
-	//set up spherical stuff
-	int count = 0;
-	const float piOverHeight = pi / height;
-	const float twoPiOverWidth = twopi / width;
-	float phi = 0;
-	float x3d, y3d, z3d;
-	float sinPhi, theta;
-
-
-	for (int y = 0; y < height; y = y + 1)
-	{
-		phi = phi + piOverHeight;
-		z3d = cosf(phi);
-		sinPhi = sinf(phi);
-		theta = 0;
-		for (int j = 0; j < VECTOR_SIZE; j++)
-		{
-			S.z.a[j] = z3d;
-		}
-		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
-		{
-
-			for (int j = 0; j < VECTOR_SIZE; j++)
-			{
-				theta = theta + twoPiOverWidth;
-				x3d = cosf(theta) * sinPhi;
-				y3d = sinf(theta) * sinPhi;
-
-				S.x.a[j] = x3d;
-				S.y.a[j] = y3d;
-				
-			}
-			
-			noise(&result[count], &S);
-			count = count + 1;
-
-		}
-	}
-
-	return (float*)result;
-
-}
-
-float* GetSpherSurfaceNoise(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, INoise noise)
-{
-
-	float* result = (float*)malloc(width*height*  sizeof(float));
-
-
-	//set up spherical stuff
-	int count = 0;
-	const float piOverHeight = pi / height;
-	const float twoPiOverWidth = twopi / width;
-	float phi = 0;
-	float x3d, y3d, z3d;
-	float sinPhi, theta;
-
-
-	for (int y = 0; y < height; y = y + 1)
-	{
-		phi = phi + piOverHeight;
-		z3d = cosf(phi);
-		sinPhi = sinf(phi);
-		theta = 0;
-		for (int x = 0; x < width; x = x + 1)
-		{
-
-
-			theta = theta + twoPiOverWidth;
-			x3d = cosf(theta) * sinPhi;
-			y3d = sinf(theta) * sinPhi;
-			
-			result[count] = noise(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
-			count = count + 1;
-
-		}
-	}
-
-	return result;
-
-}
 
 
 int different(float a, float b)
@@ -598,7 +467,7 @@ void test(INoise noise, ISIMDNoise simdNoise)
 		S.z.m = SetOne(z);
 
 		float r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
-		union uSIMD simdR;
+		uSIMD simdR;
 		simdNoise((SIMD*)&simdR, &S);
 
 		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
@@ -684,43 +553,6 @@ void test(INoise noise, ISIMDNoise simdNoise)
 }
 
 
-int main()
-{
 
-	//always test
-	test(plain, plainSIMD);
-
-	clock_t t1, t2;
-	t1 = clock();
-		
-	float * r = GetSpherSurfaceNoiseSIMD(4096, 2048, 3, 2, 1, .5, 0,fbmSIMD);
-	
-	t2 = clock();
-
-	float diff = (float)t2 - (float)t1;
-	printf("Time Taken for Sphere SIMD: %f\n", diff);
-	printf("random result:%f\n", r[3000]);
-	CleanUpSIMDNoise(r);
-
-
-	t1 = clock();
-
-	r = GetSpherSurfaceNoise(4096, 2048, 3, 2, 1, .5, 0, fbm);
-
-	t2 = clock();
-	
-	diff = t2 - t1;
-	printf("Time Taken for Sphere NON SIMD: %f\n", diff);
-	printf("random result:%f\n", r[3000]);
-	CleanUpNoise(r);
-
-	
-	
-	
-	int xy;
-	scanf("%d", &xy);
-
-
-}
 
 
