@@ -1,193 +1,17 @@
-#include <sys\timeb.h>
+#include <time.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
-#include <xmmintrin.h> //SSE
-#include <emmintrin.h> //SSE 2
-#include <smmintrin.h> // SSE4.1
-#include <immintrin.h> //avx2
-//#include <zmmintrin.h> //avx512
+#include "FastNoise.h"
 
-// Original Author: Stefan Gustavson (stegu@itn.liu.se)
-//
-// This library is public domain software, released by the author
-// into the public domain in February 2011. You may do anything
-// you like with it. You may even remove all attributions,
-// but of course I'd appreciate it if you kept my name somewhere.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-// General Public License for more details.
-
-/** \file
-\brief Implements the Noise1234 class for producing Perlin noise.
-\author Stefan Gustavson (stegu@itn.liu.se)
-*/
-
-/*
-* This implementation is "Improved Noise" as presented by
-* Ken Perlin at Siggraph 2002. The 3D function is a direct port
-* of his Java reference code available on www.noisemachine.com
-* (although I cleaned it up and made the code more readable),
-* but the 1D, 2D and 4D cases were implemented from scratch
-* by me.
-*
-* This is a highly reusable class. It has no dependencies
-* on any other file, apart from its own header file.
-*/
-
-
-/* Jack Mott - SIMD conversion, addition of fbm, turbulence, and ridge variations
-*/
-
-
-// For non SIMD only
-#define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
-#define FASTFLOOR(x) ( ((x)>0) ? ((int)x) : ((int)x-1 ) )
-#define LERP(t, a, b) ((a) + (t)*((b)-(a)))
-
-#define SSE2  //indicates we want SSE2
-#define SSE41 //indicates we want SSE4.1 instructions (floor is available)
-#define AVX2 //indicates we want AVX2 instructions (double speed!) 
-//#define USEGATHER  //slower on current (2015) cpus
-
-//creat types we can use in either the 128 or 256 case
-#ifndef AVX2
-// m128 will be our base type
-typedef __m128 SIMD;
-typedef __m128i SIMDi;
-
-//we process 4 at a time
-#define VECTOR_SIZE 4
-#define MEMORY_ALIGNMENT 16
-
-//intrinsic functions
-#define Store(x,y) _mm_store_ps(x,y)
-#define Load(x) _mm256_load_ps(x)
-#define SetOne(x) _mm_set1_ps(x)
-#define SetZero() _mm_setzero_ps()
-#define SetOnei(x) _mm_set1_epi32(x)
-#define SetZeroi(x) _mm_setzero_epi32(x)
-#define Add(x,y) _mm_add_ps(x,y)
-#define Sub(x,y) _mm_sub_ps(x,y)
-#define Addi(x,y) _mm_add_epi32(x,y)
-#define Subi(x,y) _mm_sub_epi32(x,y)
-#define Mul(x,y) _mm_mul_ps(x,y)
-#define Muli(x,y) _mm_mul_epi32(x,y)
-#define And(x,y) _mm_and_ps(x,y)
-#define Andi(x,y) _mm_and_si128(x,y)
-#define AndNot(x,y) _mm_andnot_ps(x,y)
-#define Or(x,y) _mm_or_ps(x,y)
-#define Ori(x,y) _mm_or_si128(x,y)
-#define CastToFloat(x) _mm_castsi128_ps(x)
-#define CastToInt(x) _mm_castps_si128(x)
-#define ConvertToInt(x) _mm_cvtps_epi32(x)
-#define ConvertToFloat(x) _mm_cvtepi32_ps(x)
-#define Equal(x,y)  _mm_cmpeq_ps(x,y) 
-#define Equali(x,y) _mm_cmpeq_epi32(x,y)
-#define GreaterThan(x,y) _mm_cmpgt_ps(x,y)
-#define GreaterThani(x,y) _mm_cmpgt_epi32(x,y)
-#define LessThan(x,y) _mm_cmplt_ps(x,y)
-#define LessThani(x,y) _mm_cmpgt_epi32(y,x) 
-#define NotEqual(x,y) _mm_cmpneq_ps(x,y)
-#define Floor(x) _mm_floor_ps(x)
-#define Max(x,y) _mm_max_ps(x,y)
-#define Maxi(x,y) _mm_max_epi32(x,y)
-#endif
-#ifdef AVX2
-
-// m256 will be our base type
-typedef __m256 SIMD;
-typedef __m256i SIMDi;
-
-//process 8 at t time
-#define VECTOR_SIZE 8
-#define MEMORY_ALIGNMENT 32
-
-//intrinsic functions
-#define Store(x,y) _mm256_store_ps(x,y)
-#define Load(x) _mm256_load_ps(x)
-#define SetOne(x) _mm256_set1_ps(x)
-#define SetZero() _mm256_setzero_ps()
-#define SetOnei(x) _mm256_set1_epi32(x)
-#define SetZeroi(x) _mm256_setzero_epi32(x)
-#define Add(x,y) _mm256_add_ps(x,y)
-#define Sub(x,y) _mm256_sub_ps(x,y)
-#define Addi(x,y) _mm256_add_epi32(x,y)
-#define Subi(x,y) _mm256_sub_epi32(x,y)
-#define Mul(x,y) _mm256_mul_ps(x,y)
-#define Muli(x,y) _mm256_mul_epi32(x,y)
-#define And(x,y) _mm256_and_ps(x,y)
-#define Andi(x,y) _mm256_and_si256(x,y)
-#define AndNot(x,y) _mm256_andnot_ps(x,y)
-#define Or(x,y) _mm256_or_ps(x,y)
-#define Ori(x,y) _mm256_or_si256(x,y)
-#define CastToFloat(x) _mm256_castsi256_ps(x)
-#define CastToInt(x) _mm256_castps_si256(x)
-#define ConvertToInt(x) _mm256_cvtps_epi32(x)
-#define ConvertToFloat(x) _mm256_cvtepi32_ps(x)
-#define Equal(x,y)  _mm256_cmp_ps(x,y,_CMP_EQ_OQ) 
-#define Equali(x,y) _mm256_cmpeq_epi32(x,y)
-#define GreaterThan(x,y) _mm256_cmp_ps(x,y,_CMP_GT_OQ)
-#define GreaterThani(x,y) _mm256_cmpgt_epi32(x,y)
-#define LessThan(x,y) _mm256_cmp_ps(x,y,_CMP_LT_OQ)
-#define LessThani(x,y) _mm256_cmpgt_epi32(y,x) 
-#define NotEqual(x,y) _mm256_cmp_ps(x,y,_CMP_NEQ_OQ)
-#define Floor(x) _mm256_floor_ps(x)
-#define Max(x,y) _mm256_max_ps(x,y)
-#define Maxi(x,y) _mm256_max_epi32(x,y)
-#define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
-#endif
-
-//We use this union hack for easy
-//access to the floats for unvectorizeable
-//lookup table access
-union uSIMDi {
-	SIMDi m;
-	int a[VECTOR_SIZE];
-};
-
-union uSIMD {
-	SIMD m;
-	float a[VECTOR_SIZE];
-};
-
-
-//constants
-SIMDi zeroi,one, two, four, eight, twelve, fourteen, fifteeni, ff;
-SIMD minusonef, zero, onef, six, fifteen, ten, scale;
-
-const float pi = 3.14159265359f;
-const float twopi = 6.2831853f;
-
-typedef struct
-{
-	union uSIMD x;
-	union uSIMD y;
-	union uSIMD z;
-	SIMD frequency;
-	SIMD lacunarity;
-	SIMD offset;
-	SIMD gain;
-	unsigned char octaves;
-} Settings;
-
-
-typedef void(*ISIMDNoise)(SIMD*,Settings*);
-typedef float(*INoise)(float, float, float, float, float, float, float, int);
-
-
-
-
-void initSIMD(Settings *S,float frequency, float lacunarity, float offset, float gain, int octaves)
+void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves)
 {
 	S->frequency = SetOne(frequency);
 	S->lacunarity = SetOne(lacunarity);
 	S->offset = SetOne(offset);
 	S->gain = SetOne(gain);
 	S->octaves = octaves;
-	
+
 	//integer constants	
 	zeroi = SetOnei(0);
 	one = SetOnei(1);
@@ -213,44 +37,11 @@ void initSIMD(Settings *S,float frequency, float lacunarity, float offset, float
 }
 
 
-//To scale output to [0..1]
-inline void SetUpOffsetScale(int octaves, SIMD* fbmOffset, SIMD* fbmScale)
-{
-	switch (octaves)
-	{
-	case 1:
-		*fbmOffset = SetZero();
-		*fbmScale = SetOne(1.066f);
-		break;
-	case 2:
-		*fbmOffset = SetOne(.073f);
-		*fbmScale = SetOne(.8584f);
-		break;
-	case 3:
-		*fbmOffset = SetOne(.1189f);
-		*fbmScale = SetOne(.8120f);
-		break;
-	case 4:
-		*fbmOffset = SetOne(.1440f);
-		*fbmScale = SetOne(.8083f);
-		break;
-	case 5:
-		*fbmOffset = SetOne(.1530f);
-		*fbmScale = SetOne(.8049f);
-		break;
-	default:
-		*fbmOffset = SetOne(.16f);
-		*fbmScale = SetOne(.8003f);
-	}
-
-}
-
-
 #ifndef USEGATHER
 const unsigned char perm[] =
 #endif
 #ifdef USEGATHER
-const uint32_t perm[] =
+const int32_t perm[] =
 #endif
 { 151,160,137,91,90,15,
 131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,
@@ -325,15 +116,11 @@ inline SIMD  gradV(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 	h12o14 = Or(AndNot(h12o14, *x), And(h12o14, *z));
 	v = Or(And(v, *y), AndNot(v, h12o14));
 
-	//get -u and -v
-	SIMD minusU = Sub(zero, u);
-	SIMD minusV = Sub(zero, v);
 
-	//if h1 then -u else u
-	u = Or(AndNot(h1, minusU), And(h1, u));
+	//if h1 then -u else u	
 	//if h2 then -v else v
-	v = Or(AndNot(h2, minusV), And(h2, v));
-	return Add(u, v);
+	//then add them
+	return Add(Or(AndNot(h1, Sub(zero, u)), And(h1, u)), Or(AndNot(h2, Sub(zero, v)), And(h2, v)));
 }
 
 
@@ -379,7 +166,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 
 
 	SIMD
-		r = Mul(fz0, six);
+	r = Mul(fz0, six);
 	r = Sub(r, fifteen);
 	r = Mul(r, fz0);
 	r = Add(r, ten);
@@ -388,7 +175,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	r = Mul(r, fz0);
 
 	SIMD
-		t = Mul(fy0, six);
+	t = Mul(fy0, six);
 	t = Sub(t, fifteen);
 	t = Mul(t, fy0);
 	t = Add(t, ten);
@@ -397,7 +184,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	t = Mul(t, fy0);
 
 	SIMD
-		s = Mul(fx0, six);
+	s = Mul(fx0, six);
 	s = Sub(s, fifteen);
 	s = Mul(s, fx0);
 	s = Add(s, ten);
@@ -405,23 +192,24 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	s = Mul(s, fx0);
 	s = Mul(s, fx0);
 
-	union uSIMDi p1, p2, p3, p4, p5, p6, p7, p8;
+
+	union uSIMDi p[8];
 #ifndef USEGATHER
 
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
-		p1.a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
-		p2.a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz1.a[i]]]];
-		p3.a[i] = perm[ix0.a[i] + perm[iy1.a[i] + perm[iz0.a[i]]]];
-		p4.a[i] = perm[ix0.a[i] + perm[iy1.a[i] + perm[iz1.a[i]]]];
-		p5.a[i] = perm[ix1.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
-		p6.a[i] = perm[ix1.a[i] + perm[iy0.a[i] + perm[iz1.a[i]]]];
-		p7.a[i] = perm[ix1.a[i] + perm[iy1.a[i] + perm[iz0.a[i]]]];
-		p8.a[i] = perm[ix1.a[i] + perm[iy1.a[i] + perm[iz1.a[i]]]];
+		p[0].a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
+		p[1].a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz1.a[i]]]];
+		p[2].a[i] = perm[ix0.a[i] + perm[iy1.a[i] + perm[iz0.a[i]]]];
+		p[3].a[i] = perm[ix0.a[i] + perm[iy1.a[i] + perm[iz1.a[i]]]];
+		p[4].a[i] = perm[ix1.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
+		p[5].a[i] = perm[ix1.a[i] + perm[iy0.a[i] + perm[iz1.a[i]]]];
+		p[6].a[i] = perm[ix1.a[i] + perm[iy1.a[i] + perm[iz0.a[i]]]];
+		p[7].a[i] = perm[ix1.a[i] + perm[iy1.a[i] + perm[iz1.a[i]]]];
 
 	}
 #endif // !AVX
-#ifdef USEGATHER // This sems to be slower on early AVX cpus (Which is all cpus as of 2015)
+#ifdef USEGATHER 
 	SIMDi pz0, pz1, pz0y0, pz0y1, pz1y1, pz1y0;
 
 	pz0 = Gather(perm, iz0.m, 4);
@@ -432,50 +220,50 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 	pz1y0 = Gather(perm, Addi(iy0.m, pz1), 4);
 	pz1y1 = Gather(perm, Addi(iy1.m, pz1), 4);
 
-	p1.m = Addi(ix0.m, pz0y0);
-	p1.m = Gather(perm, p1.m, 4);
+	p[0].m = Addi(ix0.m, pz0y0);
+	p[0].m = Gather(perm, p[0].m, 4);
 
-	p2.m = Addi(ix0.m, pz1y0);
-	p2.m = Gather(perm, p2.m, 4);
+	p[1].m = Addi(ix0.m, pz1y0);
+	p[1].m = Gather(perm, p[1].m, 4);
 
-	p3.m = Addi(ix0.m, pz0y1);
-	p3.m = Gather(perm, p3.m, 4);
+	p[2].m = Addi(ix0.m, pz0y1);
+	p[2].m = Gather(perm, p[2].m, 4);
 
-	p4.m = Addi(ix0.m, pz1y1);
-	p4.m = Gather(perm, p4.m, 4);
+	p[3].m = Addi(ix0.m, pz1y1);
+	p[3].m = Gather(perm, p[3].m, 4);
 
-	p5.m = Addi(ix1.m, pz0y0);
-	p5.m = Gather(perm, p5.m, 4);
+	p[4].m = Addi(ix1.m, pz0y0);
+	p[4].m = Gather(perm, p[4].m, 4);
 
-	p6.m = Addi(ix1.m, pz1y0);
-	p6.m = Gather(perm, p6.m, 4);
+	p[5].m = Addi(ix1.m, pz1y0);
+	p[5].m = Gather(perm, p[5].m, 4);
 
-	p7.m = Addi(ix1.m, pz0y1);
-	p7.m = Gather(perm, p7.m, 4);
+	p[6].m = Addi(ix1.m, pz0y1);
+	p[6].m = Gather(perm, p[6].m, 4);
 
-	p8.m = Addi(ix1.m, pz1y1);
-	p8.m = Gather(perm, p8.m, 4);
+	p[7].m = Addi(ix1.m, pz1y1);
+	p[7].m = Gather(perm, p[7].m, 4);
 
 
 #endif // AVX
 
 
-	SIMD nxy0 = gradV(&p1.m, &fx0, &fy0, &fz0);
-	SIMD nxy1 = gradV(&p2.m, &fx0, &fy0, &fz1);
+	SIMD nxy0 = gradV(&p[0].m, &fx0, &fy0, &fz0);
+	SIMD nxy1 = gradV(&p[1].m, &fx0, &fy0, &fz1);
 	SIMD nx0 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
-	nxy0 = gradV(&p3.m, &fx0, &fy1, &fz0);
-	nxy1 = gradV(&p4.m, &fx0, &fy1, &fz1);
+	nxy0 = gradV(&p[2].m, &fx0, &fy1, &fz0);
+	nxy1 = gradV(&p[3].m, &fx0, &fy1, &fz1);
 	SIMD nx1 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
 	SIMD n0 = Add(nx0, Mul(t, Sub(nx1, nx0)));
 
-	nxy0 = gradV(&p5.m, &fx1, &fy0, &fz0);
-	nxy1 = gradV(&p6.m, &fx1, &fy0, &fz1);
+	nxy0 = gradV(&p[4].m, &fx1, &fy0, &fz0);
+	nxy1 = gradV(&p[5].m, &fx1, &fy0, &fz1);
 	nx0 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
-	nxy0 = gradV(&p7.m, &fx1, &fy1, &fz0);
-	nxy1 = gradV(&p8.m, &fx1, &fy1, &fz1);
+	nxy0 = gradV(&p[6].m, &fx1, &fy1, &fz0);
+	nxy1 = gradV(&p[7].m, &fx1, &fy1, &fz1);
 	nx1 = Add(nxy0, Mul(r, Sub(nxy1, nxy0)));
 
 	SIMD n1 = Add(nx0, Mul(t, Sub(nx1, nx0)));
@@ -519,7 +307,7 @@ float noise(float x, float y, float z)
 	t = FADE(fy0);
 	s = FADE(fx0);
 
-	
+
 
 	nxy0 = grad(perm[ix0 + perm[iy0 + perm[iz0]]], fx0, fy0, fz0);
 	nxy1 = grad(perm[ix0 + perm[iy0 + perm[iz1]]], fx0, fy0, fz1);
@@ -544,15 +332,30 @@ float noise(float x, float y, float z)
 	return 0.936f * (LERP(s, n0, n1));
 }
 
+//If you ever call something with 1 octave, call this instead
+inline void plainSIMD(SIMD* out, Settings* S)
+{	
+		SIMD vfx = Mul(S->x.m, S->frequency);
+		SIMD vfy = Mul(S->y.m, S->frequency);
+		SIMD vfz = Mul(S->z.m, S->frequency);
+		*out = noiseSIMD(&vfx, &vfy, &vfz);		
+}
+
+inline float plain(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
+{
+	return noise(x*frequency, y*frequency, z*frequency);
+}
+
+
 //Fractal brownian motions using SIMD
-inline void fbmSIMD(SIMD* out, Settings* S )
+inline void fbmSIMD(SIMD* out, Settings* S)
 {
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(0.5f);
-	localFrequency = Load(&S->frequency);
-	for (int i = S->octaves; i != 0 ; i--)
-	{		
+	localFrequency = Load((const float*)&S->frequency);
+	for (int i = S->octaves; i != 0; i--)
+	{
 		SIMD vfx = Mul(S->x.m, localFrequency);
 		SIMD vfy = Mul(S->y.m, localFrequency);
 		SIMD vfz = Mul(S->z.m, localFrequency);
@@ -560,15 +363,15 @@ inline void fbmSIMD(SIMD* out, Settings* S )
 		localFrequency = Mul(localFrequency, S->lacunarity);
 		amplitude = Mul(amplitude, S->gain);
 	}
-	
+
 
 }
 
 //fractal brownian motion without SIMD
-inline float fbm(float x, float y, float z, float lacunarity, float gain, float frequency, float offset, int octaves)
+inline float fbm(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
 {
 	float sum = 0;
-	float amplitude = 0.5;	
+	float amplitude = 0.5f;
 	for (int i = octaves; i != 0; i--)
 	{
 		sum += noise(x*frequency, y*frequency, z*frequency)*amplitude;
@@ -585,9 +388,9 @@ inline void turbulenceSIMD(SIMD* out, Settings* S)
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
-	localFrequency = Load(&S->frequency);
+	localFrequency = Load((const float*)&S->frequency);
 	for (int i = S->octaves; i != 0; i--)
-	{		
+	{
 		SIMD r = Mul(amplitude, noiseSIMD(&S->x.m, &S->y.m, &S->z.m));
 		//get abs of r by trickery
 		r = Max(Sub(zero, r), r);
@@ -595,7 +398,7 @@ inline void turbulenceSIMD(SIMD* out, Settings* S)
 		localFrequency = Mul(localFrequency, S->lacunarity);
 		amplitude = Mul(amplitude, S->gain);
 	}
-	
+
 }
 
 inline float turbulence(float x, float y, float z, float lacunarity, float gain, float frequency, float offset, int octaves)
@@ -618,9 +421,9 @@ inline void ridgeSIMD(SIMD* out, Settings* S)
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
 	prev = SetOne(1.0f);
-	localFrequency = Load(&S->frequency);
+	localFrequency = Load((const float*)&S->frequency);
 	for (int i = S->octaves; i != 0; i--)
-	{		
+	{
 		SIMD r = noiseSIMD(&S->x.m, &S->y.m, &S->z.m);
 		//get abs of r by trickery
 		r = Max(Sub(zero, r), r);
@@ -628,10 +431,10 @@ inline void ridgeSIMD(SIMD* out, Settings* S)
 		r = Mul(r, r);
 		r = Mul(r, amplitude);
 		r = Mul(r, prev);
-		*out= Add(*out, r);
+		*out = Add(*out, r);
 		localFrequency = Mul(localFrequency, S->lacunarity);
 		amplitude = Mul(amplitude, S->gain);
-	}	
+	}
 
 }
 
@@ -652,25 +455,27 @@ inline float ridge(float x, float y, float z, float lacunarity, float gain, floa
 	return sum;
 }
 
-//---------------------------------------------------------------------
-//Get noise on the surface of a sphere
-//This could be SIMD up as wel, but was not clear to me what cpus 
-//support SVML for the transcendental math. Not going to speed things up
-//much either.
 
-void CleanUpNoise(float * resultArray)
+//Must be called by the caller of noise producing functions
+void CleanUpSIMDNoise(float * resultArray)
 {
 	_aligned_free(resultArray);
 }
 
-float* GetSphericalNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain,  float offset, ISIMDNoise noise)
+//Must be called by the caller of noise producing functions
+void CleanUpNoise(float * resultArray)
+{
+	free(resultArray);
+}
+
+float* GetSpherSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, ISIMDNoise noise)
 {
 	Settings S;
 	initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
 
-	float *result = (float*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
+	SIMD* result = (SIMD*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
 
-	
+
 	//set up spherical stuff
 	int count = 0;
 	const float piOverHeight = pi / height;
@@ -678,7 +483,7 @@ float* GetSphericalNoiseSIMD(int width, int height, int octaves, float lacunarit
 	float phi = 0;
 	float x3d, y3d, z3d;
 	float sinPhi, theta;
-	
+
 
 	for (int y = 0; y < height; y = y + 1)
 	{
@@ -686,6 +491,10 @@ float* GetSphericalNoiseSIMD(int width, int height, int octaves, float lacunarit
 		z3d = cosf(phi);
 		sinPhi = sinf(phi);
 		theta = 0;
+		for (int j = 0; j < VECTOR_SIZE; j++)
+		{
+			S.z.a[j] = z3d;
+		}
 		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
 		{
 
@@ -697,103 +506,217 @@ float* GetSphericalNoiseSIMD(int width, int height, int octaves, float lacunarit
 
 				S.x.a[j] = x3d;
 				S.y.a[j] = y3d;
-				S.z.a[j] = z3d;
+				
 			}
-			S.x.m = Mul(S.x.m, S.frequency);
-			S.y.m = Mul(S.y.m, S.frequency);
-			S.z.m = Mul(S.z.m, S.frequency);
-			noise((SIMD*)&result[count],&S);			
-			count = count + 4;
+			
+			noise(&result[count], &S);
+			count = count + 1;
 
 		}
 	}
-	
+
+	return (float*)result;
+
+}
+
+float* GetSpherSurfaceNoise(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, INoise noise)
+{
+
+	float* result = (float*)malloc(width*height*  sizeof(float));
+
+
+	//set up spherical stuff
+	int count = 0;
+	const float piOverHeight = pi / height;
+	const float twoPiOverWidth = twopi / width;
+	float phi = 0;
+	float x3d, y3d, z3d;
+	float sinPhi, theta;
+
+
+	for (int y = 0; y < height; y = y + 1)
+	{
+		phi = phi + piOverHeight;
+		z3d = cosf(phi);
+		sinPhi = sinf(phi);
+		theta = 0;
+		for (int x = 0; x < width; x = x + 1)
+		{
+
+
+			theta = theta + twoPiOverWidth;
+			x3d = cosf(theta) * sinPhi;
+			y3d = sinf(theta) * sinPhi;
+			
+			result[count] = noise(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
+			count = count + 1;
+
+		}
+	}
+
 	return result;
 
 }
 
 
-#define TEST_COUNT 4096
-#define OCTAVES 3
-void testNoise(INoise n)
+int different(float a, float b)
 {
-	struct timeb starttime, endtime;
-	int diff;
-	float frequency = 1;
-	ftime(&starttime);
 
-	float *result = (float*)malloc(TEST_COUNT*TEST_COUNT *  sizeof(float));
-
-	
-	int count = 0;
-	for (int x = 0; x < TEST_COUNT; x++)
+	float threshold = 0.0001f;
+	if ((a - b < threshold) && (a - b > -threshold))
 	{
-		for (int y = 0; y < TEST_COUNT; y++)
-		{
-			result[count] = n(x / 4096.0f ,y / 4096.0f , x / 4096.0f , 1.0f, 1.0f, 1.0f, 1.0f, OCTAVES);
-			count++;
-		}
+		return 0;
 	}
-
-	
-	ftime(&endtime);
-	diff = (int)(1000.0 * (endtime.time - starttime.time)
-		+ (endtime.millitm - starttime.millitm));
-	printf("%f\n", result[TEST_COUNT]);
-	printf("Time Taken for Non SIMD: %d\n", diff);
-
-
+	else {
+		return 1;
+	}
 }
 
-float* testSIMDNoise(ISIMDNoise n)
+//Tests that SIMD and non SIMD versions get the same result
+//over a variety of inputs and settings
+void test(INoise noise, ISIMDNoise simdNoise)
 {
-	struct timeb starttime, endtime;
-	int diff;
-	ftime(&starttime);
 
+	float frequency, lacunarity, octaves, gain, offset;
 	Settings S;
-	initSIMD(&S, 1, 1, 1, 1, OCTAVES);
 
+	//0,0,0
+	float x, y, z;
 
-	float* result = (float*)_aligned_malloc(TEST_COUNT*TEST_COUNT*  sizeof(float), MEMORY_ALIGNMENT);
-
-	
-	
-	int octaves = 1;
-	int count = 0;
-	for (int x = 0; x < TEST_COUNT; x++)
+	for (int i = 1; i < 4; i++)
 	{
-		for (int y = 0; y < TEST_COUNT - (VECTOR_SIZE - 1); y = y + VECTOR_SIZE)
-		{
-			for (int j = 0; j < VECTOR_SIZE; j++)
-			{
-				S.x.a[j] = (float)(x+j) / 4096.0f;
-				S.y.a[j] = (float)(y+j) / 4096.0f;
-				S.z.a[j] = (float)(x+j) / 4096.0f;
-			}
-						
-			n((SIMD*)&result[count], &S);
-			count = count + VECTOR_SIZE;
-		}
+		frequency = i;
+		lacunarity = i;
+		octaves = i;
+		gain = i / 10.0f;
+		offset = 0;
+		initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
+
+		x = 0; y = 0; z = 0;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		float r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		union uSIMD simdR;
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+		//1,1,1	
+		x = 1; y = 1; z = 1;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+		//-1,-1,-1	
+		x = -1; y = -1; z = -1;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+
+		x = .5; y = .5; z = .5;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+
+		x = -.5; y = -.5; z = -.5;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+
+		x = .1; y = .2; z = .3;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+
+		x = .3; y = .2; z = .1;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
+
+
+		x = -.3; y = .2; z = -.1;
+		S.x.m = SetOne(x);
+		S.y.m = SetOne(y);
+		S.z.m = SetOne(z);
+
+		r = noise(x, y, z, frequency, lacunarity, gain, octaves, 0);
+		simdNoise((SIMD*)&simdR, &S);
+
+		if (different(r, simdR.a[0])) printf("(%.4f,%.4f,%.4f): scalar:%.9f  SIMD:%.9f\n", x, y, z, r, simdR.a[0]);
 	}
-
-
-
-	ftime(&endtime);
-	diff = (int)(1000.0 * (endtime.time - starttime.time)
-		+ (endtime.millitm - starttime.millitm));
-	printf("%f\n", result[TEST_COUNT]);
-	printf("Time Taken for SIMD: %d\n", diff);
-	return result;
+	printf("test complete\n");
 }
+
 
 int main()
 {
+
+	//always test
+	test(plain, plainSIMD);
+
+	clock_t t1, t2;
+	t1 = clock();
+		
+	float * r = GetSpherSurfaceNoiseSIMD(4096, 2048, 3, 2, 1, .5, 0,fbmSIMD);
 	
-	//to evaluate how fast we went			
-	//float *x = GetSphericalPerlinNoise(4096, 4096, 3, 2, 0.5, 1, 0, 0,fbmSIMD);
-	testNoise(fbm);
-	testSIMDNoise(fbmSIMD);
+	t2 = clock();
+
+	float diff = (float)t2 - (float)t1;
+	printf("Time Taken for Sphere SIMD: %f\n", diff);
+	printf("random result:%f\n", r[3000]);
+	CleanUpSIMDNoise(r);
+
+
+	t1 = clock();
+
+	r = GetSpherSurfaceNoise(4096, 2048, 3, 2, 1, .5, 0, fbm);
+
+	t2 = clock();
+	
+	diff = t2 - t1;
+	printf("Time Taken for Sphere NON SIMD: %f\n", diff);
+	printf("random result:%f\n", r[3000]);
+	CleanUpNoise(r);
+
+	
+	
+	
 	int xy;
 	scanf("%d", &xy);
 
