@@ -21,8 +21,8 @@
 
 #define SSE2  //indicates we want SSE2
 #define SSE41 //indicates we want SSE4.1 instructions (floor is available)
-#define AVX2 //indicates we want AVX2 instructions (double speed!) 
-#define USEGATHER  //use the avx gather instruction to index the perm array
+//#define AVX2 //indicates we want AVX2 instructions (double speed!) 
+//#define USEGATHER  //use the avx gather instruction to index the perm array
 
 //creat types we can use in either the 128 or 256 case
 #ifndef AVX2
@@ -145,15 +145,15 @@ typedef float(*INoise)(float, float, float, float, float, float, int, float);
 
 void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
 
-extern void fbmSIMD(SIMD* out, Settings* S);
-extern void plainSIMD(SIMD* out, Settings* S);
-extern void turbulenceSIMD(SIMD* out, Settings* S);
-extern void ridgeSIMD(SIMD* out, Settings* S);
+inline extern void fbmSIMD(SIMD* out, Settings* S);
+inline extern void plainSIMD(SIMD* out, Settings* S);
+inline extern void turbulenceSIMD(SIMD* out, Settings* S);
+inline extern void ridgeSIMD(SIMD* out, Settings* S);
 
-extern float fbm(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
-extern float plain(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
-extern float turbulence(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
-extern float ridge(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
+inline extern float fbm(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
+inline extern float plain(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
+inline extern float turbulence(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
+inline extern float ridge(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset);
 
 const float pi = 3.14159265359f;
 const float twopi = 6.2831853f;

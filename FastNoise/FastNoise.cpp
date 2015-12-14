@@ -251,7 +251,7 @@ inline SIMD noiseSIMD(SIMD* x, SIMD* y, SIMD* z)
 //---------------------------------------------------------------------
 /** 3D float Perlin noise.
 */
-float noise(float x, float y, float z)
+inline float noise(float x, float y, float z)
 {
 	int ix0, iy0, ix1, iy1, iz0, iz1;
 	float fx0, fy0, fz0, fx1, fy1, fz1;
