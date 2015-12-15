@@ -199,10 +199,7 @@ inline SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 
 	SIMD n1 = Add(nx0, Mul(t, Sub(nx1, nx0)));
 
-	n1 = Add(n0, Mul(s, Sub(n1, n0)));
-	return Mul(scale, n1);
-
-
+	return  Add(n0, Mul(s, Sub(n1, n0)));
 
 }
 
@@ -260,7 +257,7 @@ inline float noise3d(float x, float y, float z)
 
 	n1 = LERP(t, nx0, nx1);
 
-	return 0.936f * (LERP(s, n0, n1));
+	return LERP(s, n0, n1);
 }
 
 
@@ -285,7 +282,7 @@ inline void fbmSIMD3d(SIMD* out, Settings* S)
 {
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
-	amplitude = SetOne(0.5f);
+	amplitude = SetOne(1);
 	localFrequency = Load((const float*)&S->frequency);
 	for (int i = S->octaves; i != 0; i--)
 	{
@@ -304,7 +301,7 @@ inline void fbmSIMD3d(SIMD* out, Settings* S)
 inline float fbm3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
 {
 	float sum = 0;
-	float amplitude = 0.5f;
+	float amplitude = 1.0f;
 	for (int i = octaves; i != 0; i--)
 	{
 		sum += noise3d(x*frequency, y*frequency, z*frequency)*amplitude;
@@ -403,7 +400,7 @@ void CleanUpNoise(float * resultArray)
 	free(resultArray);
 }
 
-float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType)
+float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType, float* outMin, float *outMax)
 {
 	Settings S;
 	initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
@@ -414,21 +411,25 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 
 	switch ((NoiseType)noiseType)
 	{
-	case FBMSIMD: noiseFunction = fbmSIMD3d; break;
-	case TURBULENCESIMD: noiseFunction = turbulenceSIMD3d; break;
-	case RIDGESIMD: noiseFunction = ridgeSIMD3d; break;
-	case PLAINSIMD: noiseFunction = plainSIMD3d; break;
-	default:return;
+	case FBM: noiseFunction = fbmSIMD3d; break;
+	case TURBULENCE: noiseFunction = turbulenceSIMD3d; break;
+	case RIDGE: noiseFunction = ridgeSIMD3d; break;
+	case PLAIN: noiseFunction = plainSIMD3d; break;
+	default:return 0;
 	}
 
 	//set up spherical stuff
 	int count = 0;
-	const float piOverHeight = pi / height;
+	const float piOverHeight = pi / (height + 1);
 	const float twoPiOverWidth = twopi / width;
 	float phi = 0;
 	float x3d, y3d, z3d;
 	float sinPhi, theta;
 
+	uSIMD min;
+	min.m = SetOne(999);
+	uSIMD max;
+	max.m = SetOne(-999);
 
 	for (int y = 0; y < height; y = y + 1)
 	{
@@ -454,16 +455,24 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 			}
 
 			noiseFunction(&result[count], &S);
+			min.m = Min(min.m, result[count]);
+			max.m = Max(max.m, result[count]);
 			count = count + 1;
-
 		}
 	}
 
+	*outMax = -999;
+	*outMin = 999;
+	for (int j = 0; j < VECTOR_SIZE; j++)
+	{
+		if (min.a[j] < *outMin) *outMin = min.a[j];
+		if (max.a[j] > *outMax) *outMax = max.a[j];
+	}
 	return (float*)result;
 
 }
 
-float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType)
+float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType, float *outMin, float *outMax)
 {
 
 	float* result = (float*)malloc(width*height*  sizeof(float));
@@ -472,15 +481,15 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 	switch ((NoiseType)noiseType)
 	{
 	case FBM: noiseFunction = fbm3d; break;
-	case TURBULENCE: noiseFunction = turbulence3d; break;	
+	case TURBULENCE: noiseFunction = turbulence3d; break;
 	case RIDGE: noiseFunction = ridge3d; break;
-	case PLAIN: noiseFunction = plain3d; break;	
-	default:return;
+	case PLAIN: noiseFunction = plain3d; break;
+	default:return 0;
 	}
 
 	//set up spherical stuff
 	int count = 0;
-	const float piOverHeight = pi / height;
+	const float piOverHeight = pi / (height + 1);
 	const float twoPiOverWidth = twopi / width;
 	float phi = 0;
 	float x3d, y3d, z3d;
@@ -493,16 +502,18 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 		z3d = cosf(phi);
 		sinPhi = sinf(phi);
 		theta = 0;
+		*outMin = 999;
+		*outMax = -999;
 		for (int x = 0; x < width; x = x + 1)
 		{
-
-
 			theta = theta + twoPiOverWidth;
-			x3d = cosf(theta) * sinPhi;
-			y3d = sinf(theta) * sinPhi;
+			x3d = cosf(theta) * sinPhi * 2;
+			y3d = sinf(theta) * sinPhi * 2;
 
 			result[count] = noiseFunction(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
-			printf("(%f,%f,%f) = %f\n", x3d, y3d, z3d, result[count]);
+
+			*outMin = fminf(*outMin, result[count]);
+			*outMax = fmaxf(*outMax, result[count]);
 			count = count + 1;
 
 		}

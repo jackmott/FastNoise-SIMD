@@ -70,6 +70,7 @@ typedef __m128i SIMDi;
 #define Floor(x) _mm_floor_ps(x)
 #define Max(x,y) _mm_max_ps(x,y)
 #define Maxi(x,y) _mm_max_epi32(x,y)
+#define Min(x,y) _mm_min_ps(x,y)
 #endif
 #ifdef AVX2
 
@@ -114,6 +115,7 @@ typedef __m256i SIMDi;
 #define Floor(x) _mm256_floor_ps(x)
 #define Max(x,y) _mm256_max_ps(x,y)
 #define Maxi(x,y) _mm256_max_epi32(x,y)
+#define Min(x,y) _mm256_min_ps(x,y)
 #define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
 #endif
 
@@ -144,6 +146,7 @@ typedef struct
 } Settings;
 
 
+extern enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN};
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 extern SIMD minusonef, zero, onef, six, fifteen, ten, scale;
 
@@ -152,8 +155,8 @@ typedef float(*INoise)(float, float, float, float, float, float, int, float);
 
 FAST_NOISE_DLL_API inline extern void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
 
-const float pi = 3.14159265359f;
-const float twopi = 6.2831853f;
+const float pi = 3.141593;
+const float twopi = 6.283185;
 
 
 #ifndef USEGATHER
