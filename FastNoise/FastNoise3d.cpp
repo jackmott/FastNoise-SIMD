@@ -454,8 +454,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	int count = 0;
 	const float piOverHeight = pi / (height + 1);
 	const float twoPiOverWidth = twopi / width;
-	float phi = 0;
-	float x3d, y3d, z3d;
+	float phi = 0;	
 	float sinPhi, theta;
 
 	uSIMD min;
@@ -463,26 +462,30 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	uSIMD max;
 	max.m = SetOne(-999);
 
+	float* xcos = new float[width];
+	float* ysin = new float[width];
+
+	theta = 0;
+	for (int x = 0; x < width; x = x + 1)
+	{
+		theta = theta + twoPiOverWidth;
+		xcos[x] = cosf(theta);
+		ysin[x] = sinf(theta);
+	}
+
 	for (int y = 0; y < height; y = y + 1)
 	{
 		phi = phi + piOverHeight;
-		z3d = cosf(phi);
-		sinPhi = sinf(phi);
-		theta = 0;
-
-		S.z.m = SetOne(z3d);
-
+		S.z.m = SetOne(cosf(phi));
+		sinPhi = sinf(phi);		
+		
 		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
 		{
 
 			for (int j = 0; j < VECTOR_SIZE; j++)
-			{
-				theta = theta + twoPiOverWidth;
-				x3d = cosf(theta) * sinPhi;
-				y3d = sinf(theta) * sinPhi;
-
-				S.x.a[j] = x3d;
-				S.y.a[j] = y3d;
+			{				
+				S.x.a[j] = xcos[x]* sinPhi;
+				S.y.a[j]= ysin[x] * sinPhi;
 
 			}
 
@@ -530,18 +533,29 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 
 	*outMin = 999;
 	*outMax = -999;
+
+	float* xcos = new float[width];
+	float* ysin = new float[width];
+	//Precalculate cos/sin	
+	theta = 0;
+	for (int x = 0; x < width; x = x + 1)
+	{
+		theta = theta + twoPiOverWidth;
+		ysin[x] = sinf(theta);
+		xcos[x] = cosf(theta);		
+	}
+
 	for (int y = 0; y < height; y = y + 1)
 	{
 		phi = phi + piOverHeight;
 		z3d = cosf(phi);
 		sinPhi = sinf(phi);
-		theta = 0;
-		
+				
 		for (int x = 0; x < width; x = x + 1)
-		{
-			theta = theta + twoPiOverWidth;
-			x3d = cosf(theta) * sinPhi;
-			y3d = sinf(theta) * sinPhi;
+		{		
+			//use cos/sin lookup tables
+			x3d = xcos[x] * sinPhi;
+			y3d = ysin[x] * sinPhi;
 
 			result[count] = noiseFunction(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
 
