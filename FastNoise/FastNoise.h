@@ -20,8 +20,12 @@
 
 // For non SIMD only
 #define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
+#define DERIVFADE(t) (t * t * ( t *(30 * t - 60 ) + 30) )
 #define FASTFLOOR(x) ( ((x)>0) ? ((int)x) : ((int)x-1 ) )
 #define LERP(t, a, b) ((a) + (t)*((b)-(a)))
+
+#define SCALE 1.754f
+#define OFFSET .05f
 
 #define SSE2  //indicates we want SSE2
 #define SSE41 //indicates we want SSE4.1 instructions (floor is available)
@@ -119,6 +123,8 @@ typedef __m256i SIMDi;
 #define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
 #endif
 
+
+
 //We use this union hack for easy
 //access to the floats for unvectorizeable
 //lookup table access
@@ -146,9 +152,9 @@ typedef struct
 } Settings;
 
 
-extern enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN};
+extern enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2};
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
-extern SIMD minusonef, zero, onef, six, fifteen, ten, scale;
+extern SIMD minusonef, zero, onef, six, fifteen, ten, pscale, poffset;
 
 typedef void(*ISIMDNoise)(SIMD*, Settings*);
 typedef float(*INoise)(float, float, float, float, float, float, int, float);

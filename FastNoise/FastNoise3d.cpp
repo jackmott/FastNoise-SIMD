@@ -199,7 +199,7 @@ inline SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 
 	SIMD n1 = Add(nx0, Mul(t, Sub(nx1, nx0)));
 
-	return  Add(n0, Mul(s, Sub(n1, n0)));
+	return  Mul(Sub(Add(n0, Mul(s, Sub(n1, n0))),poffset),pscale);
 
 }
 
@@ -235,11 +235,12 @@ inline float noise3d(float x, float y, float z)
 	t = FADE(fy0);
 	s = FADE(fx0);
 
-
+	
 
 	nxy0 = grad3d(perm[ix0 + perm[iy0 + perm[iz0]]], fx0, fy0, fz0);
 	nxy1 = grad3d(perm[ix0 + perm[iy0 + perm[iz1]]], fx0, fy0, fz1);
 	nx0 = LERP(r, nxy0, nxy1);
+	
 
 	nxy0 = grad3d(perm[ix0 + perm[iy1 + perm[iz0]]], fx0, fy1, fz0);
 	nxy1 = grad3d(perm[ix0 + perm[iy1 + perm[iz1]]], fx0, fy1, fz1);
@@ -257,7 +258,9 @@ inline float noise3d(float x, float y, float z)
 
 	n1 = LERP(t, nx0, nx1);
 
-	return LERP(s, n0, n1);
+
+
+	return (LERP(s, n0, n1) - OFFSET)*SCALE;
 }
 
 
@@ -275,6 +278,24 @@ inline float plain3d(float x, float y, float z, float frequency, float lacunarit
 {
 	return noise3d(x*frequency, y*frequency, z*frequency);
 }
+
+inline void ridgePlainSIMD3d(SIMD* out, Settings* S)
+{
+	SIMD vfx = Mul(S->x.m, S->frequency);
+	SIMD vfy = Mul(S->y.m, S->frequency);
+	SIMD vfz = Mul(S->z.m, S->frequency);
+	SIMD r = noiseSIMD3d(&vfx, &vfy, &vfz);
+	//abs of r
+	*out = Max(Sub(zero, r), r);
+	
+}
+
+inline float ridgePlain3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
+{
+	return fabs(noise3d(x*frequency, y*frequency, z*frequency));
+}
+
+
 
 
 //Fractal brownian motions using SIMD
@@ -321,7 +342,10 @@ inline void turbulenceSIMD3d(SIMD* out, Settings* S)
 	localFrequency = Load((const float*)&S->frequency);
 	for (int i = S->octaves; i != 0; i--)
 	{
-		SIMD r = Mul(amplitude, noiseSIMD3d(&S->x.m, &S->y.m, &S->z.m));
+		SIMD vfx = Mul(S->x.m, localFrequency);
+		SIMD vfy = Mul(S->y.m, localFrequency);
+		SIMD vfz = Mul(S->z.m, localFrequency);
+		SIMD r = Mul(amplitude, noiseSIMD3d(&vfx, &vfy, &vfz));		
 		//get abs of r by trickery
 		r = Max(Sub(zero, r), r);
 		*out = Add(*out, r);
@@ -345,6 +369,10 @@ inline float turbulence3d(float x, float y, float z, float lacunarity, float gai
 }
 
 
+
+
+
+
 inline void ridgeSIMD3d(SIMD* out, Settings* S)
 {
 	SIMD amplitude, prev, localFrequency;
@@ -354,7 +382,10 @@ inline void ridgeSIMD3d(SIMD* out, Settings* S)
 	localFrequency = Load((const float*)&S->frequency);
 	for (int i = S->octaves; i != 0; i--)
 	{
-		SIMD r = noiseSIMD3d(&S->x.m, &S->y.m, &S->z.m);
+		SIMD vfx = Mul(S->x.m, localFrequency);
+		SIMD vfy = Mul(S->y.m, localFrequency);
+		SIMD vfz = Mul(S->z.m, localFrequency);
+		SIMD r = noiseSIMD3d(&vfx, &vfy, &vfz);
 		//get abs of r by trickery
 		r = Max(Sub(zero, r), r);
 		r = Sub(S->offset, r);
@@ -362,6 +393,7 @@ inline void ridgeSIMD3d(SIMD* out, Settings* S)
 		r = Mul(r, amplitude);
 		r = Mul(r, prev);
 		*out = Add(*out, r);
+		prev = Load((const float*)&r);
 		localFrequency = Mul(localFrequency, S->lacunarity);
 		amplitude = Mul(amplitude, S->gain);
 	}
@@ -414,7 +446,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	case FBM: noiseFunction = fbmSIMD3d; break;
 	case TURBULENCE: noiseFunction = turbulenceSIMD3d; break;
 	case RIDGE: noiseFunction = ridgeSIMD3d; break;
-	case PLAIN: noiseFunction = plainSIMD3d; break;
+	case PLAIN: noiseFunction = plainSIMD3d; break;	
 	default:return 0;
 	}
 
@@ -484,6 +516,7 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 	case TURBULENCE: noiseFunction = turbulence3d; break;
 	case RIDGE: noiseFunction = ridge3d; break;
 	case PLAIN: noiseFunction = plain3d; break;
+	
 	default:return 0;
 	}
 
@@ -495,20 +528,20 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 	float x3d, y3d, z3d;
 	float sinPhi, theta;
 
-
+	*outMin = 999;
+	*outMax = -999;
 	for (int y = 0; y < height; y = y + 1)
 	{
 		phi = phi + piOverHeight;
 		z3d = cosf(phi);
 		sinPhi = sinf(phi);
 		theta = 0;
-		*outMin = 999;
-		*outMax = -999;
+		
 		for (int x = 0; x < width; x = x + 1)
 		{
 			theta = theta + twoPiOverWidth;
-			x3d = cosf(theta) * sinPhi * 2;
-			y3d = sinf(theta) * sinPhi * 2;
+			x3d = cosf(theta) * sinPhi;
+			y3d = sinf(theta) * sinPhi;
 
 			result[count] = noiseFunction(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
 

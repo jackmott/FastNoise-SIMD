@@ -7,7 +7,7 @@
 
 
 SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
-SIMD minusonef, zero, onef, six, fifteen, ten, scale;
+SIMD minusonef, zero, onef, six, fifteen, ten, pscale, poffset;
 
 extern inline void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves)
 {
@@ -37,6 +37,7 @@ extern inline void initSIMD(Settings *S, float frequency, float lacunarity, floa
 	fifteen = SetOne(15);
 
 	//final scaling constant
-	scale = SetOne(.936f);
-
+	pscale = SetOne(SCALE);
+	poffset = SetOne(OFFSET);
+	
 }
