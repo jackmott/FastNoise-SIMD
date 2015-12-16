@@ -436,15 +436,16 @@ void CleanUpNoise(float * resultArray)
 
 void SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result, float *outMin, float *outMax)
 {
-	const float piOverHeight = pi / (height + 1);
-	const float twoPiOverWidth = twopi / width;
+	const float piOverHeight = pi / (height + 1);	
 	float phi = 0;
-	float sinPhi, theta;
+	float sinPhi;
 	
 	int count = start*width / VECTOR_SIZE;
 
-	SIMD min = SetOne(99999);
-	SIMD max = SetOne(-99999);
+	uSIMD min;
+	uSIMD max;
+	min.m = SetOne(999);
+	max.m = SetOne(-999);
 	for (int y = start; y < end; y = y + 1)
 	{
 		phi = phi + piOverHeight;
@@ -457,18 +458,26 @@ void SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Sett
 
 			for (int j = 0; j < VECTOR_SIZE; j++)
 			{
-				S->x.a[j] = xcos[x] * sinPhi;
-				S->y.a[j] = ysin[x] * sinPhi;
+				S->x.a[j] = xcos[x+j] * sinPhi;
+				S->y.a[j] = ysin[x+j] * sinPhi;
 
 			}
 
 			//printf("setting count:%i ...", count);
 			noiseFunction(&result[count], S);
 		//	printf(" done setting count:%i\n", count);
-			min = Min(min, result[count]);
-			max = Max(max, result[count]);
+			min.m = Min(min.m, result[count]);
+			max.m = Max(max.m, result[count]);
 			count = count + 1;
 		}
+	}
+
+	*outMin = 999;
+	*outMax = -999;
+	for (int i = 0; i < VECTOR_SIZE; i++)
+	{
+		*outMin = fminf(*outMin, min.a[i]);
+		*outMax = fmaxf(*outMax, max.a[i]);
 	}
 
 }
@@ -511,23 +520,28 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	}
 
 	unsigned cpuCount = std::thread::hardware_concurrency();
-	if (cpuCount < 1) cpuCount = 1;
+	
 	std::thread* threads = new std::thread[cpuCount];
 	int start = 0;
-	float min, max;
+	float* min = new float[cpuCount];
+	float* max = new float[cpuCount];
 	for (int i = 0; i < cpuCount; i++)
 	{
 		Settings S = Settings();
 		initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
 		int end = start + (height / cpuCount);
 		//SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, SIMD* min, SIMD *max, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result)
-		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S, xcos, ysin, noiseFunction, result,&min,&max);
+		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S, xcos, ysin, noiseFunction, result,&min[i],&max[i]);
 		start = end;
 	}
 
+	*outMin = 999;
+	*outMax = -999;
 	for (int i = 0; i < cpuCount; i++)
 	{
 		threads[i].join();
+		*outMin = fminf(*outMin, min[i]);
+		*outMax = fmaxf(*outMax, max[i]);
 	}
 	
 	
