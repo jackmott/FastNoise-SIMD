@@ -152,7 +152,7 @@ typedef struct
 } Settings;
 
 
-extern enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2};
+enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2};
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 extern SIMD minusonef, zero, onef, six, fifteen, ten, pscale, poffset;
 

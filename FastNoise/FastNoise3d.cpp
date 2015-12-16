@@ -1,6 +1,7 @@
 #include "FastNoise3d.h"
 #include <math.h>
 #include <stdio.h>
+#include <thread>
 
 //---------------------------------------------------------------------
 
@@ -127,6 +128,7 @@ inline SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 	uSIMDi p[8];
 #ifndef USEGATHER
 
+	
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
 		p[0].a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
@@ -292,7 +294,7 @@ inline void ridgePlainSIMD3d(SIMD* out, Settings* S)
 
 inline float ridgePlain3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
 {
-	return fabs(noise3d(x*frequency, y*frequency, z*frequency));
+	return (float)fabs(noise3d(x*frequency, y*frequency, z*frequency));
 }
 
 
@@ -304,7 +306,7 @@ inline void fbmSIMD3d(SIMD* out, Settings* S)
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(1);
-	localFrequency = Load((const float*)&S->frequency);
+	localFrequency = S->frequency;
 	for (int i = S->octaves; i != 0; i--)
 	{
 		SIMD vfx = Mul(S->x.m, localFrequency);
@@ -339,7 +341,7 @@ inline void turbulenceSIMD3d(SIMD* out, Settings* S)
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
-	localFrequency = Load((const float*)&S->frequency);
+	localFrequency = S->frequency;
 	for (int i = S->octaves; i != 0; i--)
 	{
 		SIMD vfx = Mul(S->x.m, localFrequency);
@@ -379,7 +381,7 @@ inline void ridgeSIMD3d(SIMD* out, Settings* S)
 	*out = SetZero();
 	amplitude = SetOne(1.0f);
 	prev = SetOne(1.0f);
-	localFrequency = Load((const float*)&S->frequency);
+	localFrequency = S->frequency;
 	for (int i = S->octaves; i != 0; i--)
 	{
 		SIMD vfx = Mul(S->x.m, localFrequency);
@@ -432,11 +434,48 @@ void CleanUpNoise(float * resultArray)
 	free(resultArray);
 }
 
+void SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result, float *outMin, float *outMax)
+{
+	const float piOverHeight = pi / (height + 1);
+	const float twoPiOverWidth = twopi / width;
+	float phi = 0;
+	float sinPhi, theta;
+	
+	int count = start*width / VECTOR_SIZE;
+
+	SIMD min = SetOne(99999);
+	SIMD max = SetOne(-99999);
+	for (int y = start; y < end; y = y + 1)
+	{
+		phi = phi + piOverHeight;
+		S->z.m = SetOne(cosf(phi));
+		sinPhi = sinf(phi);
+
+
+		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
+		{
+
+			for (int j = 0; j < VECTOR_SIZE; j++)
+			{
+				S->x.a[j] = xcos[x] * sinPhi;
+				S->y.a[j] = ysin[x] * sinPhi;
+
+			}
+
+			//printf("setting count:%i ...", count);
+			noiseFunction(&result[count], S);
+		//	printf(" done setting count:%i\n", count);
+			min = Min(min, result[count]);
+			max = Max(max, result[count]);
+			count = count + 1;
+		}
+	}
+
+}
+
 float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType, float* outMin, float *outMax)
 {
-	Settings S;
-	initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
-
+	
 	SIMD* result = (SIMD*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
 
 	ISIMDNoise noiseFunction;
@@ -446,7 +485,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	case FBM: noiseFunction = fbmSIMD3d; break;
 	case TURBULENCE: noiseFunction = turbulenceSIMD3d; break;
 	case RIDGE: noiseFunction = ridgeSIMD3d; break;
-	case PLAIN: noiseFunction = plainSIMD3d; break;	
+	case PLAIN: noiseFunction = plainSIMD3d; break;
 	default:return 0;
 	}
 
@@ -454,18 +493,16 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	int count = 0;
 	const float piOverHeight = pi / (height + 1);
 	const float twoPiOverWidth = twopi / width;
-	float phi = 0;	
+	float phi = 0;
 	float sinPhi, theta;
 
-	uSIMD min;
-	min.m = SetOne(999);
-	uSIMD max;
-	max.m = SetOne(-999);
-
+	
 	float* xcos = new float[width];
 	float* ysin = new float[width];
 
 	theta = 0;
+
+
 	for (int x = 0; x < width; x = x + 1)
 	{
 		theta = theta + twoPiOverWidth;
@@ -473,36 +510,27 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	for (int y = 0; y < height; y = y + 1)
+	unsigned cpuCount = std::thread::hardware_concurrency();
+	if (cpuCount < 1) cpuCount = 1;
+	std::thread* threads = new std::thread[cpuCount];
+	int start = 0;
+	float min, max;
+	for (int i = 0; i < cpuCount; i++)
 	{
-		phi = phi + piOverHeight;
-		S.z.m = SetOne(cosf(phi));
-		sinPhi = sinf(phi);		
-		
-		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
-		{
-
-			for (int j = 0; j < VECTOR_SIZE; j++)
-			{				
-				S.x.a[j] = xcos[x]* sinPhi;
-				S.y.a[j]= ysin[x] * sinPhi;
-
-			}
-
-			noiseFunction(&result[count], &S);
-			min.m = Min(min.m, result[count]);
-			max.m = Max(max.m, result[count]);
-			count = count + 1;
-		}
+		Settings S = Settings();
+		initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
+		int end = start + (height / cpuCount);
+		//SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, SIMD* min, SIMD *max, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result)
+		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S, xcos, ysin, noiseFunction, result,&min,&max);
+		start = end;
 	}
 
-	*outMax = -999;
-	*outMin = 999;
-	for (int j = 0; j < VECTOR_SIZE; j++)
+	for (int i = 0; i < cpuCount; i++)
 	{
-		if (min.a[j] < *outMin) *outMin = min.a[j];
-		if (max.a[j] > *outMax) *outMax = max.a[j];
+		threads[i].join();
 	}
+	
+	
 	return (float*)result;
 
 }
