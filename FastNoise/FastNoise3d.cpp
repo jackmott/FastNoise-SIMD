@@ -527,11 +527,11 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	float* max = new float[cpuCount];
 	for (int i = 0; i < cpuCount; i++)
 	{
-		Settings S = Settings();
-		initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
+		Settings* S = new Settings();
+		initSIMD(S, frequency, lacunarity, offset, gain, octaves);
 		int end = start + (height / cpuCount);
 		//SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, SIMD* min, SIMD *max, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result)
-		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S, xcos, ysin, noiseFunction, result,&min[i],&max[i]);
+		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, S, xcos, ysin, noiseFunction, result,&min[i],&max[i]);
 		start = end;
 	}
 
