@@ -519,7 +519,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	unsigned cpuCount = 1;// std::thread::hardware_concurrency();
+	unsigned cpuCount = std::thread::hardware_concurrency();
 	
 	std::thread* threads = new std::thread[cpuCount];
 	int start = 0;
