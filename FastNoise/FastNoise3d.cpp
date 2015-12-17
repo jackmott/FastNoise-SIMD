@@ -437,7 +437,7 @@ void CleanUpNoise(float * resultArray)
 void SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result, float *outMin, float *outMax)
 {
 	const float piOverHeight = pi / (height + 1);	
-	float phi = 0;
+	float phi = piOverHeight*start;
 	float sinPhi;
 	
 	int count = start*width / VECTOR_SIZE;
@@ -519,7 +519,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	unsigned cpuCount = std::thread::hardware_concurrency();
+	unsigned cpuCount = 1;// std::thread::hardware_concurrency();
 	
 	std::thread* threads = new std::thread[cpuCount];
 	int start = 0;
