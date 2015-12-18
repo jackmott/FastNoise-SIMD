@@ -14,6 +14,8 @@ void CleanUpNoise(float * resultArray)
 	free(resultArray);
 }
 
+
+//Thread helper function for 2d texture that wraps on sphere
 void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Settings* S, float* xcos, float* ysin, ISIMDFractal3d fractalFunction,ISIMDNoise3d noiseFunction, SIMD* result, float *outMin, float *outMax)
 {
 	const float piOverHeight = pi / (height + 1);
@@ -26,6 +28,7 @@ void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Set
 	uSIMD max;
 	min.m = SetOne(999);
 	max.m = SetOne(-999);
+	//Platforms which have SIMD cos/sin can vectorize this
 	for (int y = start; y < end; y = y + 1)
 	{
 		phi = phi + piOverHeight;
@@ -34,8 +37,7 @@ void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Set
 
 
 		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
-		{
-
+		{			
 			for (int j = 0; j < VECTOR_SIZE; j++)
 			{
 				S->x.a[j] = xcos[x + j] * sinPhi;
@@ -60,6 +62,8 @@ void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Set
 
 }
 
+
+//Multithreaded function to get a 2d texture that maps on a sphere
 float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int fractalType, int noiseType, float* outMin, float *outMax)
 {
 	//SIMD data has to be aligned
@@ -124,9 +128,11 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	unsigned cpuCount = 1; // std::thread::hardware_concurrency();
-
+	//See how many logical cores we have and create that many threads
+	unsigned cpuCount =  std::thread::hardware_concurrency();
 	std::thread* threads = new std::thread[cpuCount];
+
+	//Break up the problem into cpuCount pieces for each thread
 	int start = 0;
 	float* min = new float[cpuCount];
 	float* max = new float[cpuCount];
@@ -134,12 +140,13 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	for (int i = 0; i < cpuCount; i++)
 	{
 		initSIMD(&S[i], frequency, lacunarity, offset, gain, octaves);
-		int end = start + (height / cpuCount);
-		//SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, SIMD* min, SIMD *max, float* xcos, float* ysin, ISIMDNoise fractalFunction, SIMD* result)
+		int end = start + (height / cpuCount);		
 		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S[i], xcos, ysin, fractalFunction,noiseFunction, result, &min[i], &max[i]);
 		start = end;
 	}
 
+
+	//Get the min of mins and max of maxes so consumers of this can normalize the output if desired
 	*outMin = 999;
 	*outMax = -999;
 	for (int i = 0; i < cpuCount; i++)
