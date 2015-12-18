@@ -4,6 +4,177 @@
 #include <thread>
 
 
+
+inline SIMD dot(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
+{
+	SIMD xx = Mul(x1, x2);
+	SIMD yy = Mul(y1, y2);
+	SIMD zz = Mul(z1, z2);
+	return Add(zz, Add(yy, zz));
+}
+
+inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
+	uSIMDi i, j, k;
+
+	SIMD s = Mul(F3, Add(*x, Add(*y, *z)));
+
+#ifdef SSE41
+	i.m = ConvertToInt(Floor(Add(*x,s)));
+	j.m = ConvertToInt(Floor(Add(*y,s)));
+	k.m = ConvertToInt(Floor(Add(*z,s)));
+#endif
+	//drop out to scalar if we don't
+#ifndef SSE41
+	uSIMD* ux = x;
+	uSIMD* uy = y;
+	uSIMD* uz = z;
+	for (int i = 0; i < VECTOR_SIZE; i++)
+	{
+		i.a[i] = FASTFLOOR((*ux).a[i]);
+		j.a[i] = FASTFLOOR((*uy).a[i]);
+		k.a[i] = FASTFLOOR((*uz).a[i]);
+	}
+#endif
+
+	SIMD t = Mul(ConvertToFloat(Addi(i.m, Addi(j.m, k.m))), G3);
+	SIMD X0 = Sub(ConvertToFloat(i.m), t);
+	SIMD Y0 = Sub(ConvertToFloat(j.m), t);
+	SIMD Z0 = Sub(ConvertToFloat(k.m), t);
+	SIMD x0 = Sub(*x, X0);
+	SIMD y0 = Sub(*y, Y0);
+	SIMD z0 = Sub(*z, Z0);
+
+
+	//This determines what simplex we are in, in the irregular tetrahedron 
+	// -(Stefan Gustavson (stegu@itn.liu.se).)
+	//The following mess accomplishes this transofmration without branching
+	//Because we can't branch in SIMD -Jack Mott
+	/*       ijk1 ijk2
+	x>y>z -> 100  110
+	x>z>y -> 100  101
+	z>x>y -> 001  101
+	z>y>x -> 001  011
+	y>z>x -> 010  011
+	y>x>z -> 010  110
+	*/
+	SIMDi i1, i2, j1, j2, k1, k2;
+	i1 = Andi(one, Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(z0, x0))));
+	j1 = Andi(one, Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(z0, y0))));
+	k1 = Andi(one, Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(y0, z0))));
+
+	//for i2
+	SIMDi yx_xz = Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(x0, z0)));
+	SIMDi zx_xy = Andi(CastToInt(LessThan(z0, x0)), CastToInt(LessThan(x0, y0)));
+
+	//for j2
+	SIMDi xy_yz = Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(y0, z0)));
+	SIMDi zy_yx = Andi(CastToInt(LessThan(z0, y0)), CastToInt(LessThan(y0, x0)));
+
+	//for k2
+	SIMDi yz_zx = Andi(CastToInt(LessThan(y0, z0)), CastToInt(LessThan(z0, x0)));
+	SIMDi xz_zy = Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(z0, y0)));
+
+	i2 = Andi(one, Ori(i1, Ori(yx_xz, zx_xy)));
+	j2 = Andi(one, Ori(j1, Ori(xy_yz, zy_yx)));
+	k2 = Andi(one, Ori(k1, Ori(yz_zx, xz_zy)));
+
+	// A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
+	// a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
+	// a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
+	// c = 1/6. -Stefan Gustavson (stegu@itn.liu.se).
+	SIMD x1 = Sub(x0, Add(ConvertToFloat(i1), G3));
+	SIMD y1 = Sub(y0, Add(ConvertToFloat(j1), G3));
+	SIMD z1 = Sub(z0, Add(ConvertToFloat(k1), G3));
+	SIMD x2 = Sub(x0, Add(ConvertToFloat(i2), G32));
+	SIMD y2 = Sub(y0, Add(ConvertToFloat(j2), G32));
+	SIMD z2 = Sub(z0, Add(ConvertToFloat(k2), G32));
+	SIMD x3 = Sub(x0, Add(onef, G33));
+	SIMD y3 = Sub(y0, Add(onef, G33));
+	SIMD z3 = Sub(z0, Add(onef, G33));
+
+
+	SIMDi ii = Andi(i.m, ff);
+	SIMDi jj = Andi(j.m, ff);
+	SIMDi kk = Andi(k.m, ff);
+
+	//int gi0 = permMod12[ii + perm[jj + perm[kk]]];
+	//int gi1 = permMod12[ii + i1 + perm[jj + j1 + perm[kk + k1]]];
+	//int gi2 = permMod12[ii + i2 + perm[jj + j2 + perm[kk + k2]]];
+	//int gi3 = permMod12[ii + 1 + perm[jj + 1 + perm[kk + 1]]];	
+	SIMDi pkk = Gather(perm, kk, 4);
+	SIMDi pkk1 = Gather(perm, Addi(kk, one), 4);
+	SIMDi pkkk1 = Gather(perm, Addi(kk, k1), 4);
+	SIMDi pkkk2 = Gather(perm, Addi(kk, k2), 4);
+
+	SIMDi pjj = Gather(perm, Addi(jj, pkk), 4);
+	SIMDi pjjj1 = Gather(perm, Addi(jj, Addi(j1, pkkk1)), 4);
+	SIMDi pjjj2 = Gather(perm, Addi(jj, Addi(j2, pkkk2)), 4);
+	SIMDi pjj1 = Gather(perm, Addi(jj, Addi(one, pkk1)), 4);
+
+
+	SIMDi gi0 = Gather(permMOD12, Addi(ii, pjj), 4);
+	SIMDi gi1 = Gather(permMOD12, Addi(ii, pjjj1), 4);
+	SIMDi gi2 = Gather(permMOD12, Addi(ii, pjjj2), 4);
+	SIMDi gi3 = Gather(permMOD12, Addi(ii, pjj1), 4);
+
+	//ti = .6 - xi*xi - yi*yi - zi*zi
+	SIMD t0 = Sub(Sub(Sub(psix, Mul(x0, x0)), Mul(y0, y0)), Mul(z0, z0));
+	SIMD t1 = Sub(Sub(Sub(psix, Mul(x1, x1)), Mul(y1, y1)), Mul(z1, z1));
+	SIMD t2 = Sub(Sub(Sub(psix, Mul(x2, x2)), Mul(y2, y2)), Mul(z2, z2));
+	SIMD t3 = Sub(Sub(Sub(psix, Mul(x3, x3)), Mul(y3, y3)), Mul(z3, z3));
+
+	//ti*ti*ti*ti
+	SIMD t0q = Mul(t0, t0);
+	t0q = Mul(t0q, t0q);
+	SIMD t1q = Mul(t1, t1);
+	t1q = Mul(t1q, t1q);
+	SIMD t2q = Mul(t2, t2);
+	t2q = Mul(t2q, t2q);
+	SIMD t3q = Mul(t3, t3);
+	t3q = Mul(t3q, t3q);
+
+
+	SIMD gi0x = Gatherf(gradX, gi0, 4);
+	SIMD gi0y = Gatherf(gradY, gi0, 4);
+	SIMD gi0z = Gatherf(gradZ, gi0, 4);
+
+	SIMD gi1x = Gatherf(gradX, gi1, 4);
+	SIMD gi1y = Gatherf(gradY, gi1, 4);
+	SIMD gi1z = Gatherf(gradZ, gi1, 4);
+
+	SIMD gi2x = Gatherf(gradX, gi2, 4);
+	SIMD gi2y = Gatherf(gradY, gi2, 4);
+	SIMD gi2z = Gatherf(gradZ, gi2, 4);
+
+	SIMD gi3x = Gatherf(gradX, gi3, 4);
+	SIMD gi3y = Gatherf(gradY, gi3, 4);
+	SIMD gi3z = Gatherf(gradZ, gi3, 4);
+
+	SIMD n0 = Mul(t0q, dot(gi0x, gi0y, gi0z, x0, y0, z0));
+	SIMD n1 = Mul(t1q, dot(gi1x, gi1y, gi1z, x1, y1, z1));
+	SIMD n2 = Mul(t2q, dot(gi2x, gi2y, gi2z, x2, y2, z2));
+	SIMD n3 = Mul(t3q, dot(gi3x, gi3y, gi3z, x3, y3, z3));
+
+
+
+	//if ti < 0 then 0 else ni
+	SIMD cond;
+	cond = LessThan(t0, zero);
+	n0 = Or(And(cond, zero), AndNot(cond, n0));
+	cond = LessThan(t1, zero);
+	n1 = Or(And(cond, zero), AndNot(cond, n1));
+	cond = LessThan(t2, zero);
+	n2 = Or(And(cond, zero), AndNot(cond, n2));
+	cond = LessThan(t3, zero);
+	n3 = Or(And(cond, zero), AndNot(cond, n3));
+
+
+	return Mul(thirtytwo, Add(n0, Add(n1, Add(n2, n3))));
+
+
+
+}
+
 //---------------------------------------------------------------------
 
 /*
@@ -277,6 +448,15 @@ inline void plainSIMD3d(SIMD* out, Settings* S)
 	*out = noiseSIMD3d(&vfx, &vfy, &vfz);
 }
 
+//If you ever call something with 1 octave, call this instead
+inline void plainSIMPLEXSIMD3d(SIMD* out, Settings* S)
+{
+	SIMD vfx = Mul(S->x.m, S->frequency);
+	SIMD vfy = Mul(S->y.m, S->frequency);
+	SIMD vfz = Mul(S->z.m, S->frequency);
+	*out = simlpexSIMD3d(&vfx, &vfy, &vfz);
+}
+
 inline float plain3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
 {
 	return noise3d(x*frequency, y*frequency, z*frequency);
@@ -489,18 +669,24 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	case TURBULENCE: noiseFunction = turbulenceSIMD3d; break;
 	case RIDGE: noiseFunction = ridgeSIMD3d; break;
 	case PLAIN: noiseFunction = plainSIMD3d; break;
+	case SIMPLEX: 
+	{
+		initSIMDSimplex();
+		noiseFunction = plainSIMPLEXSIMD3d; break;
+	}
 	default:return 0;
 	}
 
 	//Swap in plain versions of noise when octaves is 1, for more speed
-	if (octaves == 1 && noiseType != RIDGE)
+	/*if (octaves == 1 && noiseType != RIDGE)
 	{
 		noiseFunction = plainSIMD3d;
 	}
 	else if (octaves == 1 && noiseType == RIDGE)
 	{
 		noiseFunction == ridgePlainSIMD3d;
-	}
+	}*/
+	
 		
 
 	//set up spherical stuff
@@ -518,7 +704,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	unsigned cpuCount =  std::thread::hardware_concurrency();
+	unsigned cpuCount = 1;// std::thread::hardware_concurrency();
 	
 	std::thread* threads = new std::thread[cpuCount];
 	int start = 0;

@@ -121,6 +121,7 @@ typedef __m256i SIMDi;
 #define Maxi(x,y) _mm256_max_epi32(x,y)
 #define Min(x,y) _mm256_min_ps(x,y)
 #define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
+#define Gatherf(x,y,z) _mm256_i32gather_ps(x,y,z);
 #endif
 
 
@@ -152,17 +153,46 @@ typedef struct
 } Settings;
 
 
-enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2};
+enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2,SIMPLEX};
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
-extern SIMD minusonef, zero, onef, six, fifteen, ten, pscale, poffset;
+extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo, pscale, poffset, F3, G3,G32,G33;
 
 typedef void(*ISIMDNoise)(SIMD*, Settings*);
 typedef float(*INoise)(float, float, float, float, float, float, int, float);
 
 FAST_NOISE_DLL_API inline extern void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
-
+inline extern void initSIMDSimplex();
 const float pi = 3.141593;
 const float twopi = 6.283185;
+
+typedef struct Grad
+{
+	SIMD x;
+	SIMD y;
+	SIMD z;
+
+	Grad(float xx, float yy, float zz)
+	{
+		x = SetOne(xx);
+		y = SetOne(yy);
+		z = SetOne(zz);
+	}
+} Grad;
+
+const float gradX[] =
+{
+	1,-1,1,-1,1,-1,1,-1,0,0,0,0
+};
+
+const float gradY[] =
+{
+	1,1,-1,-2,0,0,0,0,1,-1,1,-1
+};
+
+const float gradZ[] =
+{
+	0,0,0,0,1,1,-1,-1,1,1,-1,-1
+};
 
 
 #ifndef USEGATHER
@@ -200,3 +230,35 @@ const int32_t perm[] =
 };
 
 #endif
+
+//Used for simplex
+#ifndef USEGATHER
+const unsigned char permMOD12[] =
+#endif
+#ifdef USEGATHER
+const int32_t permMOD12[] =
+#endif
+{
+7, 4, 5, 7, 6, 3, 11, 1, 9, 11, 0, 5, 2, 5, 7, 9, 8, 0, 7, 6, 9, 10, 8, 3,
+1, 0, 9, 10, 11, 10, 6, 4, 7, 0, 6, 3, 0, 2, 5, 2, 10, 0, 3, 11, 9, 11, 11,
+8, 9, 9, 9, 4, 9, 5, 8, 3, 6, 8, 5, 4, 3, 0, 8, 7, 2, 9, 11, 2, 7, 0, 3, 10,
+5, 2, 2, 3, 11, 3, 1, 2, 0, 7, 1, 2, 4, 9, 8, 5, 7, 10, 5, 4, 4, 6, 11, 6,
+5, 1, 3, 5, 1, 0, 8, 1, 5, 4, 0, 7, 4, 5, 6, 1, 8, 4, 3, 10, 8, 8, 3, 2, 8,
+4, 1, 6, 5, 6, 3, 4, 4, 1, 10, 10, 4, 3, 5, 10, 2, 3, 10, 6, 3, 10, 1, 8, 3,
+2, 11, 11, 11, 4, 10, 5, 2, 9, 4, 6, 7, 3, 2, 9, 11, 8, 8, 2, 8, 10, 7, 10, 5,
+9, 5, 11, 11, 7, 4, 9, 9, 10, 3, 1, 7, 2, 0, 2, 7, 5, 8, 4, 10, 5, 4, 8, 2, 6,
+1, 0, 11, 10, 2, 1, 10, 6, 0, 0, 11, 11, 6, 1, 9, 3, 1, 7, 9, 2, 11, 11, 1, 0,
+10, 7, 1, 7, 10, 1, 4, 0, 0, 8, 7, 1, 2, 9, 7, 4, 6, 2, 6, 8, 1, 9, 6, 6, 7, 5,
+0, 0, 3, 9, 8, 3, 6, 6, 11, 1, 0, 0,
+7, 4, 5, 7, 6, 3, 11, 1, 9, 11, 0, 5, 2, 5, 7, 9, 8, 0, 7, 6, 9, 10, 8, 3,
+1, 0, 9, 10, 11, 10, 6, 4, 7, 0, 6, 3, 0, 2, 5, 2, 10, 0, 3, 11, 9, 11, 11,
+8, 9, 9, 9, 4, 9, 5, 8, 3, 6, 8, 5, 4, 3, 0, 8, 7, 2, 9, 11, 2, 7, 0, 3, 10,
+5, 2, 2, 3, 11, 3, 1, 2, 0, 7, 1, 2, 4, 9, 8, 5, 7, 10, 5, 4, 4, 6, 11, 6,
+5, 1, 3, 5, 1, 0, 8, 1, 5, 4, 0, 7, 4, 5, 6, 1, 8, 4, 3, 10, 8, 8, 3, 2, 8,
+4, 1, 6, 5, 6, 3, 4, 4, 1, 10, 10, 4, 3, 5, 10, 2, 3, 10, 6, 3, 10, 1, 8, 3,
+2, 11, 11, 11, 4, 10, 5, 2, 9, 4, 6, 7, 3, 2, 9, 11, 8, 8, 2, 8, 10, 7, 10, 5,
+9, 5, 11, 11, 7, 4, 9, 9, 10, 3, 1, 7, 2, 0, 2, 7, 5, 8, 4, 10, 5, 4, 8, 2, 6,
+1, 0, 11, 10, 2, 1, 10, 6, 0, 0, 11, 11, 6, 1, 9, 3, 1, 7, 9, 2, 11, 11, 1, 0,
+10, 7, 1, 7, 10, 1, 4, 0, 0, 8, 7, 1, 2, 9, 7, 4, 6, 2, 6, 8, 1, 9, 6, 6, 7, 5,
+0, 0, 3, 9, 8, 3, 6, 6, 11, 1, 0, 0
+};

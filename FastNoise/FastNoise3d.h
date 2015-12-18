@@ -5,8 +5,9 @@
 
 
 
-extern "C" {
 
+extern "C" {
+	FAST_NOISE_DLL_API inline extern SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z);
 		
 	FAST_NOISE_DLL_API inline extern float noise3d(float x, float y, float z);
 	FAST_NOISE_DLL_API inline extern SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z);
