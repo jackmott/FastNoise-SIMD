@@ -102,10 +102,10 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	//int gi1 = permMod12[ii + i1 + perm[jj + j1 + perm[kk + k1]]];
 	//int gi2 = permMod12[ii + i2 + perm[jj + j2 + perm[kk + k2]]];
 	//int gi3 = permMod12[ii + 1 + perm[jj + 1 + perm[kk + 1]]];	
-	SIMDi pkk = Gather(perm, kk, 4);
-	SIMDi pkk1 = Gather(perm, Addi(kk, one), 4);
+	SIMDi pkk = Gather(perm, kk, 4);	
 	SIMDi pkkk1 = Gather(perm, Addi(kk, k1), 4);
 	SIMDi pkkk2 = Gather(perm, Addi(kk, k2), 4);
+	SIMDi pkk1 = Gather(perm, Addi(kk, one), 4);
 
 	SIMDi pjj = Gather(perm, Addi(jj, pkk), 4);
 	SIMDi pjjj1 = Gather(perm, Addi(jj, Addi(j1, pkkk1)), 4);
@@ -114,9 +114,9 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 
 
 	SIMDi gi0 = Gather(permMOD12, Addi(ii, pjj), 4);
-	SIMDi gi1 = Gather(permMOD12, Addi(ii, pjjj1), 4);
-	SIMDi gi2 = Gather(permMOD12, Addi(ii, pjjj2), 4);
-	SIMDi gi3 = Gather(permMOD12, Addi(ii, pjj1), 4);
+	SIMDi gi1 = Gather(permMOD12, Addi(i1,Addi(ii, pjjj1)), 4);
+	SIMDi gi2 = Gather(permMOD12, Addi(i2,Addi(ii, pjjj2)), 4);
+	SIMDi gi3 = Gather(permMOD12, Addi(one,Addi(ii, pjj1)), 4);
 
 	//ti = .6 - xi*xi - yi*yi - zi*zi
 	
