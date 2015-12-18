@@ -53,10 +53,10 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	y>z>x -> 010  011
 	y>x>z -> 010  110
 	*/
-	SIMDi i1, i2, j1, j2, k1, k2;
-	i1 = Andi(one, Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(z0, x0))));
-	j1 = Andi(one, Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(z0, y0))));
-	k1 = Andi(one, Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(y0, z0))));
+	uSIMDi i1, i2, j1, j2, k1, k2;
+	i1.m = Andi(one, Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(z0, x0))));
+	j1.m = Andi(one, Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(z0, y0))));
+	k1.m = Andi(one, Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(y0, z0))));
 
 	//for i2
 	SIMDi yx_xz = Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(x0, z0)));
@@ -70,48 +70,58 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	SIMDi yz_zx = Andi(CastToInt(LessThan(y0, z0)), CastToInt(LessThan(z0, x0)));
 	SIMDi xz_zy = Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(z0, y0)));
 
-	i2 = Andi(one, Ori(i1, Ori(yx_xz, zx_xy)));
-	j2 = Andi(one, Ori(j1, Ori(xy_yz, zy_yx)));
-	k2 = Andi(one, Ori(k1, Ori(yz_zx, xz_zy)));
+	i2.m = Andi(one, Ori(i1.m, Ori(yx_xz, zx_xy)));
+	j2.m = Andi(one, Ori(j1.m, Ori(xy_yz, zy_yx)));
+	k2.m = Andi(one, Ori(k1.m, Ori(yz_zx, xz_zy)));
 
 	// A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
 	// a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
 	// a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
 	// c = 1/6. -Stefan Gustavson (stegu@itn.liu.se).
-	SIMD x1 = Add(Sub(x0, ConvertToFloat(i1)), G3);
-	SIMD y1 = Add(Sub(y0, ConvertToFloat(j1)), G3);
-	SIMD z1 = Add(Sub(z0, ConvertToFloat(k1)), G3);
-	SIMD x2 = Add(Sub(x0, ConvertToFloat(i2)), G32);
-	SIMD y2 = Add(Sub(y0, ConvertToFloat(j2)), G32);
-	SIMD z2 = Add(Sub(z0, ConvertToFloat(k2)), G32);
+	SIMD x1 = Add(Sub(x0, ConvertToFloat(i1.m)), G3);
+	SIMD y1 = Add(Sub(y0, ConvertToFloat(j1.m)), G3);
+	SIMD z1 = Add(Sub(z0, ConvertToFloat(k1.m)), G3);
+	SIMD x2 = Add(Sub(x0, ConvertToFloat(i2.m)), G32);
+	SIMD y2 = Add(Sub(y0, ConvertToFloat(j2.m)), G32);
+	SIMD z2 = Add(Sub(z0, ConvertToFloat(k2.m)), G32);
 	SIMD x3 = Add(Sub(x0, onef), G33);
 	SIMD y3 = Add(Sub(y0, onef), G33);
 	SIMD z3 = Add(Sub(z0, onef), G33);
 
 
-	SIMDi ii = Andi(i.m, ff);
-	SIMDi jj = Andi(j.m, ff);
-	SIMDi kk = Andi(k.m, ff);
+	uSIMDi ii;
+	ii.m = Andi(i.m, ff);
+	uSIMDi jj;
+	jj.m = Andi(j.m, ff);
+	uSIMDi kk;
+	kk.m = Andi(k.m, ff);
+	uSIMDi gi0, gi1, gi2, gi3;
+#ifndef USEGATHER
+	for (int i = 0; i < VECTOR_SIZE; i++)
+	{
+		gi0.a[i] = permMOD12[ii.a[i] + perm[jj.a[i] + perm[kk.a[i]]]];
+		gi1.a[i] = permMOD12[ii.a[i] + i1.a[i] + perm[jj.a[i] + j1.a[i] + perm[kk.a[i]+k1.a[i]]]];
+		gi2.a[i] = permMOD12[ii.a[i] + i2.a[i] + perm[jj.a[i] + j2.a[i] + perm[kk.a[i]+k2.a[i]]]];
+		gi3.a[i] = permMOD12[ii.a[i] + 1 + perm[jj.a[i] + 1 + perm[kk.a[i]]]];
+	}
+#endif
+#ifdef USEGATHER
+	SIMDi pkk = Gather(perm, kk.m, 4);	
+	SIMDi pkkk1 = Gather(perm, Addi(kk.m, k1.m), 4);
+	SIMDi pkkk2 = Gather(perm, Addi(kk.m, k2.m), 4);
+	SIMDi pkk1 = Gather(perm, Addi(kk.m, one), 4);
 
-	//int gi0 = permMod12[ii + perm[jj + perm[kk]]];
-	//int gi1 = permMod12[ii + i1 + perm[jj + j1 + perm[kk + k1]]];
-	//int gi2 = permMod12[ii + i2 + perm[jj + j2 + perm[kk + k2]]];
-	//int gi3 = permMod12[ii + 1 + perm[jj + 1 + perm[kk + 1]]];	
-	SIMDi pkk = Gather(perm, kk, 4);	
-	SIMDi pkkk1 = Gather(perm, Addi(kk, k1), 4);
-	SIMDi pkkk2 = Gather(perm, Addi(kk, k2), 4);
-	SIMDi pkk1 = Gather(perm, Addi(kk, one), 4);
-
-	SIMDi pjj = Gather(perm, Addi(jj, pkk), 4);
-	SIMDi pjjj1 = Gather(perm, Addi(jj, Addi(j1, pkkk1)), 4);
-	SIMDi pjjj2 = Gather(perm, Addi(jj, Addi(j2, pkkk2)), 4);
-	SIMDi pjj1 = Gather(perm, Addi(jj, Addi(one, pkk1)), 4);
+	SIMDi pjj = Gather(perm, Addi(jj.m, pkk), 4);
+	SIMDi pjjj1 = Gather(perm, Addi(jj.m, Addi(j1.m, pkkk1)), 4);
+	SIMDi pjjj2 = Gather(perm, Addi(jj.m, Addi(j2.m, pkkk2)), 4);
+	SIMDi pjj1 = Gather(perm, Addi(jj.m, Addi(one, pkk1)), 4);
 
 
-	SIMDi gi0 = Gather(permMOD12, Addi(ii, pjj), 4);
-	SIMDi gi1 = Gather(permMOD12, Addi(i1,Addi(ii, pjjj1)), 4);
-	SIMDi gi2 = Gather(permMOD12, Addi(i2,Addi(ii, pjjj2)), 4);
-	SIMDi gi3 = Gather(permMOD12, Addi(one,Addi(ii, pjj1)), 4);
+	gi0.m = Gather(permMOD12, Addi(ii.m, pjj), 4);
+	gi1.m = Gather(permMOD12, Addi(i1.m,Addi(ii.m, pjjj1)), 4);
+	gi2.m = Gather(permMOD12, Addi(i2.m,Addi(ii.m, pjjj2)), 4);
+	gi3.m = Gather(permMOD12, Addi(one,Addi(ii.m, pjj1)), 4);
+#endif
 
 	//ti = .6 - xi*xi - yi*yi - zi*zi
 	
@@ -131,26 +141,54 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	t3q = Mul(t3q, t3q);
 
 
-	SIMD gi0x = Gatherf(gradX, gi0, 4);
-	SIMD gi0y = Gatherf(gradY, gi0, 4);
-	SIMD gi0z = Gatherf(gradZ, gi0, 4);
+	uSIMD
+		gi0x, gi0y, gi0z,
+		gi1x, gi1y, gi1z,
+		gi2x, gi2y, gi2z,
+		gi3x, gi3y, gi3z;
+#ifndef USEGATHER
+	for (int i = 0; i < VECTOR_SIZE; i++)
+	{
+		gi0x.a[i] = gradX[gi0.a[i]];
+		gi0y.a[i] = gradY[gi0.a[i]];
+		gi0z.a[i] = gradZ[gi0.a[i]];
 
-	SIMD gi1x = Gatherf(gradX, gi1, 4);
-	SIMD gi1y = Gatherf(gradY, gi1, 4);
-	SIMD gi1z = Gatherf(gradZ, gi1, 4);
+		gi1x.a[i] = gradX[gi1.a[i]];
+		gi1y.a[i] = gradY[gi1.a[i]];
+		gi1z.a[i] = gradZ[gi1.a[i]];
+		
+		gi2x.a[i] = gradX[gi2.a[i]];
+		gi2y.a[i] = gradY[gi2.a[i]];
+		gi2z.a[i] = gradZ[gi2.a[i]];
 
-	SIMD gi2x = Gatherf(gradX, gi2, 4);
-	SIMD gi2y = Gatherf(gradY, gi2, 4);
-	SIMD gi2z = Gatherf(gradZ, gi2, 4);
+		gi3x.a[i] = gradX[gi3.a[i]];
+		gi3y.a[i] = gradY[gi3.a[i]];
+		gi3z.a[i] = gradZ[gi3.a[i]];
 
-	SIMD gi3x = Gatherf(gradX, gi3, 4);
-	SIMD gi3y = Gatherf(gradY, gi3, 4);
-	SIMD gi3z = Gatherf(gradZ, gi3, 4);
+	}
+#endif
+#ifdef USEGATHER
+	gi0x.m = Gatherf(gradX, gi0.m, 4);
+	gi0y.m = Gatherf(gradY, gi0.m, 4);
+	gi0z.m = Gatherf(gradZ, gi0.m, 4);
 
-	SIMD n0 = Mul(t0q, dot(gi0x, gi0y, gi0z, x0, y0, z0));
-	SIMD n1 = Mul(t1q, dot(gi1x, gi1y, gi1z, x1, y1, z1));
-	SIMD n2 = Mul(t2q, dot(gi2x, gi2y, gi2z, x2, y2, z2));
-	SIMD n3 = Mul(t3q, dot(gi3x, gi3y, gi3z, x3, y3, z3));
+	gi1x.m = Gatherf(gradX, gi1.m, 4);
+	gi1y.m = Gatherf(gradY, gi1.m, 4);
+	gi1z.m = Gatherf(gradZ, gi1.m, 4);
+
+	gi2x.m = Gatherf(gradX, gi2.m, 4);
+	gi2y.m = Gatherf(gradY, gi2.m, 4);
+	gi2z.m = Gatherf(gradZ, gi2.m, 4);
+	
+	gi3x.m = Gatherf(gradX, gi3.m, 4);
+	gi3y.m = Gatherf(gradY, gi3.m, 4);
+	gi3z.m = Gatherf(gradZ, gi3.m, 4);
+#endif
+
+	SIMD n0 = Mul(t0q, dot(gi0x.m, gi0y.m, gi0z.m, x0, y0, z0));
+	SIMD n1 = Mul(t1q, dot(gi1x.m, gi1y.m, gi1z.m, x1, y1, z1));
+	SIMD n2 = Mul(t2q, dot(gi2x.m, gi2y.m, gi2z.m, x2, y2, z2));
+	SIMD n3 = Mul(t3q, dot(gi3x.m, gi3y.m, gi3z.m, x3, y3, z3));
 
 
 
