@@ -1,5 +1,5 @@
 # FastNoise SIMD
-Ultra fast Perline and Simplex noise functions sped up with SSE2,SSE4, and AVX2 instructions. 
+Ultra fast Perlin and Simplex noise functions sped up with SSE2,SSE4, and AVX2 instructions. 
 
 FastNoise.h / cpp
 -----------------
@@ -7,7 +7,8 @@ Contains SIMD constants, constant lookup tables, and SIMD intrinsic helper #defi
 which allow you to switch between SSE2, SSE4, and AVX2 builds by adjusting the #defines
 at the top.  The SIMD typedef allows us to abstract the __m128 and __m256 types for each
 case.  It should not be too hard to adapt this to AVX512 or other instruction sets, just add
-a new set of #defines for the instructions in question, and a new typedef for SIMD.
+a new set of #defines for the instructions in question, and a new typedef for SIMD. Please 
+feel free to add other SIMD platforms and pull request!
 
 FastNoise3d.h / cpp
 -------------------
