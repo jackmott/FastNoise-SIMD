@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
-#include "FastNoise.h"
+#include "headers\FastNoise.h"
 
 
 

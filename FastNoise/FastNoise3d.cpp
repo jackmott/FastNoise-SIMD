@@ -1,9 +1,4 @@
-#include "FastNoise3d.h"
-#include <math.h>
-#include <stdio.h>
-#include <thread>
-
-
+#include "headers\FastNoise3d.h"
 
 inline SIMD dot(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
 {
@@ -13,7 +8,7 @@ inline SIMD dot(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
 	return Add(xx, Add(yy, zz));
 }
 
-inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
+inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	uSIMDi i, j, k;
 
 	uSIMD s;
@@ -171,10 +166,12 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	n3 = Or(And(cond, zero), AndNot(cond, n3));
 
 
-	return Mul(thirtytwo, Add(n0, Add(n1, Add(n2, n3))));
+	return  Mul(thirtytwo, Add(n0, Add(n1, Add(n2, n3))));
+}
 
-
-
+inline float simplex3d(float x, float y, float z)
+{
+	return 1.0f;
 }
 
 //---------------------------------------------------------------------
@@ -205,7 +202,7 @@ inline float grad3d(int hash, float x, float y, float z) {
 }
 
 
-inline SIMD  gradSIMD3d(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
+inline SIMD gradSIMD3d(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 
 	SIMDi h = Andi(*hash, fifteeni);
 	SIMD h1 = ConvertToFloat(Equali(zeroi, Andi(h, one)));
@@ -230,7 +227,7 @@ inline SIMD  gradSIMD3d(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 }
 
 
-inline SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z)
+inline SIMD perlinSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 {
 	uSIMDi ix0, iy0, ix1, iy1, iz0, iz1;
 	SIMD fx0, fy0, fz0, fx1, fy1, fz1;
@@ -384,7 +381,7 @@ inline SIMD noiseSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 //---------------------------------------------------------------------
 /** 3D float Perlin noise.
 */
-inline float noise3d(float x, float y, float z)
+inline float perlin3d(float x, float y, float z)
 {
 	int ix0, iy0, ix1, iy1, iz0, iz1;
 	float fx0, fy0, fz0, fx1, fy1, fz1;
@@ -440,367 +437,4 @@ inline float noise3d(float x, float y, float z)
 }
 
 
-
-//If you ever call something with 1 octave, call this instead
-inline void plainSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD vfx = Mul(S->x.m, S->frequency);
-	SIMD vfy = Mul(S->y.m, S->frequency);
-	SIMD vfz = Mul(S->z.m, S->frequency);
-	*out = noiseSIMD3d(&vfx, &vfy, &vfz);
-}
-
-//If you ever call something with 1 octave, call this instead
-inline void plainSIMPLEXSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD vfx = Mul(S->x.m, S->frequency);
-	SIMD vfy = Mul(S->y.m, S->frequency);
-	SIMD vfz = Mul(S->z.m, S->frequency);
-	*out = simlpexSIMD3d(&vfx, &vfy, &vfz);
-}
-
-inline float plain3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
-{
-	return noise3d(x*frequency, y*frequency, z*frequency);
-}
-
-inline void ridgePlainSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD vfx = Mul(S->x.m, S->frequency);
-	SIMD vfy = Mul(S->y.m, S->frequency);
-	SIMD vfz = Mul(S->z.m, S->frequency);
-	SIMD r = noiseSIMD3d(&vfx, &vfy, &vfz);
-	//abs of r
-	*out = Max(Sub(zero, r), r);
-	
-}
-
-inline float ridgePlain3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
-{
-	return (float)fabs(noise3d(x*frequency, y*frequency, z*frequency));
-}
-
-
-
-//Fractal brownian motions using SIMD
-inline void fbmSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD amplitude, localFrequency;
-	*out = SetZero();
-	amplitude = SetOne(1);
-	localFrequency = S->frequency;
-	for (int i = S->octaves; i != 0; i--)
-	{
-		SIMD vfx = Mul(S->x.m, localFrequency);
-		SIMD vfy = Mul(S->y.m, localFrequency);
-		SIMD vfz = Mul(S->z.m, localFrequency);
-		*out = Add(*out, Mul(amplitude, noiseSIMD3d(&vfx, &vfy, &vfz)));
-		localFrequency = Mul(localFrequency, S->lacunarity);
-		amplitude = Mul(amplitude, S->gain);
-	}
-
-
-}
-
-//fractal brownian motion without SIMD
-inline float fbm3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset)
-{
-	float sum = 0;
-	float amplitude = 1.0f;
-	for (int i = octaves; i != 0; i--)
-	{
-		sum += noise3d(x*frequency, y*frequency, z*frequency)*amplitude;
-		frequency *= lacunarity;
-		amplitude *= gain;
-	}
-	return sum;
-}
-
-
-//turbulence  using SIMD
-inline void turbulenceSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD amplitude, localFrequency;
-	*out = SetZero();
-	amplitude = SetOne(1.0f);
-	localFrequency = S->frequency;
-	for (int i = S->octaves; i != 0; i--)
-	{
-		SIMD vfx = Mul(S->x.m, localFrequency);
-		SIMD vfy = Mul(S->y.m, localFrequency);
-		SIMD vfz = Mul(S->z.m, localFrequency);
-		SIMD r = Mul(amplitude, noiseSIMD3d(&vfx, &vfy, &vfz));		
-		//get abs of r by trickery
-		r = Max(Sub(zero, r), r);
-		*out = Add(*out, r);
-		localFrequency = Mul(localFrequency, S->lacunarity);
-		amplitude = Mul(amplitude, S->gain);
-	}
-
-}
-
-inline float turbulence3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
-{
-	float sum = 0;
-	float amplitude = 1;
-	for (int i = octaves; i != 0; i--)
-	{
-		sum += (float)fabs(noise3d(x*frequency, y*frequency, z*frequency)*amplitude);
-		frequency *= lacunarity;
-		amplitude *= gain;
-	}
-	return sum;
-}
-
-
-inline void ridgeSIMD3d(SIMD* out, Settings* S)
-{
-	SIMD amplitude, prev, localFrequency;
-	*out = SetZero();
-	amplitude = SetOne(1.0f);
-	prev = SetOne(1.0f);
-	localFrequency = S->frequency;
-	for (int i = S->octaves; i != 0; i--)
-	{
-		SIMD vfx = Mul(S->x.m, localFrequency);
-		SIMD vfy = Mul(S->y.m, localFrequency);
-		SIMD vfz = Mul(S->z.m, localFrequency);
-		SIMD r = noiseSIMD3d(&vfx, &vfy, &vfz);
-		//get abs of r by trickery
-		r = Max(Sub(zero, r), r);
-		r = Sub(S->offset, r);
-		r = Mul(r, r);
-		r = Mul(r, amplitude);
-		r = Mul(r, prev);
-		*out = Add(*out, r);
-		prev = Load((const float*)&r);
-		localFrequency = Mul(localFrequency, S->lacunarity);
-		amplitude = Mul(amplitude, S->gain);
-	}
-
-}
-
-inline float ridge3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset)
-{
-	float sum = 0;
-	float amplitude = 0.5f;
-	float prev = 1.0f;
-	for (int i = octaves; i != 0; i--)
-	{
-		float r = (float)fabs(noise3d(x*frequency, y*frequency, z*frequency));
-		r = offset - r;
-		r = r*r;
-		sum += r*amplitude*prev;
-		frequency *= lacunarity;
-		amplitude *= gain;
-	}
-	return sum;
-}
-
-
-
-
-//Must be called by the caller of noise producing functions
-void CleanUpNoiseSIMD(float * resultArray)
-{
-	_aligned_free(resultArray);
-}
-
-//Must be called by the caller of noise producing functions
-void CleanUpNoise(float * resultArray)
-{
-	free(resultArray);
-}
-
-void SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result, float *outMin, float *outMax)
-{
-	const float piOverHeight = pi / (height + 1);	
-	float phi = piOverHeight*start;
-	float sinPhi;
-	
-	int count = start*width / VECTOR_SIZE;
-
-	uSIMD min;
-	uSIMD max;
-	min.m = SetOne(999);
-	max.m = SetOne(-999);
-	for (int y = start; y < end; y = y + 1)
-	{
-		phi = phi + piOverHeight;
-		S->z.m = SetOne(cosf(phi));
-		sinPhi = sinf(phi);
-
-
-		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
-		{
-
-			for (int j = 0; j < VECTOR_SIZE; j++)
-			{
-				S->x.a[j] = xcos[x+j] * sinPhi;
-				S->y.a[j] = ysin[x+j] * sinPhi;
-
-			}
-			
-			noiseFunction(&result[count], S);		
-			min.m = Min(min.m, result[count]);
-			max.m = Max(max.m, result[count]);
-			count = count + 1;
-		}
-	}
-
-	*outMin = 999;
-	*outMax = -999;
-	for (int i = 0; i < VECTOR_SIZE; i++)
-	{
-		*outMin = fminf(*outMin, min.a[i]);
-		*outMax = fmaxf(*outMax, max.a[i]);
-	}
-
-}
-
-float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType, float* outMin, float *outMax)
-{
-	//SIMD data has to be aligned
-	SIMD* result = (SIMD*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
-
-	ISIMDNoise noiseFunction;
-
-	switch ((NoiseType)noiseType)
-	{
-	case FBM: noiseFunction = fbmSIMD3d; break;
-	case TURBULENCE: noiseFunction = turbulenceSIMD3d; break;
-	case RIDGE: noiseFunction = ridgeSIMD3d; break;
-	case PLAIN: noiseFunction = plainSIMD3d; break;
-	case SIMPLEX: 
-	{
-		initSIMDSimplex();
-		noiseFunction = plainSIMPLEXSIMD3d; break;
-	}
-	default:return 0;
-	}
-
-	//Swap in plain versions of noise when octaves is 1, for more speed
-	/*if (octaves == 1 && noiseType != RIDGE)
-	{
-		noiseFunction = plainSIMD3d;
-	}
-	else if (octaves == 1 && noiseType == RIDGE)
-	{
-		noiseFunction == ridgePlainSIMD3d;
-	}*/
-	
-		
-
-	//set up spherical stuff
-	int count = 0;	
-	const float twoPiOverWidth = twopi / width;
-	float theta = 0;
-	
-	float* xcos = new float[width];
-	float* ysin = new float[width];
-	
-	for (int x = 0; x < width; x = x + 1)
-	{
-		theta = theta + twoPiOverWidth;
-		xcos[x] = cosf(theta);
-		ysin[x] = sinf(theta);
-	}
-
-	unsigned cpuCount =  std::thread::hardware_concurrency();
-	
-	std::thread* threads = new std::thread[cpuCount];
-	int start = 0;
-	float* min = new float[cpuCount];
-	float* max = new float[cpuCount];
-	Settings* S = new Settings[cpuCount];
-	for (int i = 0; i < cpuCount; i++)
-	{		
-		initSIMD(&S[i], frequency, lacunarity, offset, gain, octaves);
-		int end = start + (height / cpuCount);
-		//SphereSurfaceNoiseSIMDThread(int start, int end,int width, int height, Settings* S, SIMD* min, SIMD *max, float* xcos, float* ysin, ISIMDNoise noiseFunction, SIMD* result)
-		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S[i], xcos, ysin, noiseFunction, result,&min[i],&max[i]);
-		start = end;
-	}
-
-	*outMin = 999;
-	*outMax = -999;
-	for (int i = 0; i < cpuCount; i++)
-	{
-		threads[i].join();		
-		*outMin = fminf(*outMin, min[i]);
-		*outMax = fmaxf(*outMax, max[i]);		
-	}
-	delete[] xcos;
-	delete[] ysin;
-	delete[] min;
-	delete[] max;
-	delete[] S;
-	delete[] threads;
-	return (float*)result;
-
-}
-
-float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int noiseType, float *outMin, float *outMax)
-{
-
-	float* result = (float*)malloc(width*height*  sizeof(float));
-	INoise noiseFunction;
-
-	switch ((NoiseType)noiseType)
-	{
-	case FBM: noiseFunction = fbm3d; break;
-	case TURBULENCE: noiseFunction = turbulence3d; break;
-	case RIDGE: noiseFunction = ridge3d; break;
-	case PLAIN: noiseFunction = plain3d; break;
-	
-	default:return 0;
-	}
-
-	//set up spherical stuff
-	int count = 0;
-	const float piOverHeight = pi / (height + 1);
-	const float twoPiOverWidth = twopi / width;
-	float phi = 0;
-	float x3d, y3d, z3d;
-	float sinPhi, theta;
-
-	*outMin = 999;
-	*outMax = -999;
-
-	float* xcos = new float[width];
-	float* ysin = new float[width];
-	//Precalculate cos/sin	
-	theta = 0;
-	for (int x = 0; x < width; x = x + 1)
-	{
-		theta = theta + twoPiOverWidth;
-		ysin[x] = sinf(theta);
-		xcos[x] = cosf(theta);		
-	}
-
-	for (int y = 0; y < height; y = y + 1)
-	{
-		phi = phi + piOverHeight;
-		z3d = cosf(phi);
-		sinPhi = sinf(phi);
-				
-		for (int x = 0; x < width; x = x + 1)
-		{		
-			//use cos/sin lookup tables
-			x3d = xcos[x] * sinPhi;
-			y3d = ysin[x] * sinPhi;
-
-			result[count] = noiseFunction(x3d, y3d, z3d, frequency, lacunarity, gain, octaves, offset);
-
-			*outMin = fminf(*outMin, result[count]);
-			*outMax = fmaxf(*outMax, result[count]);
-			count = count + 1;
-
-		}
-	}
-	delete[] xcos;
-	delete[] ysin;
-	return result;
-
-}
 

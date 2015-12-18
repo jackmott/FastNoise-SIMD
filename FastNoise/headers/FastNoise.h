@@ -153,17 +153,27 @@ typedef struct
 } Settings;
 
 
-enum NoiseType { FBM, TURBULENCE, RIDGE, PLAIN,BILLOWY,RIDGE2,SIMPLEX};
+enum FractalType { FBM, TURBULENCE, RIDGE, PLAIN};
+enum NoiseType {PERLIN, SIMPLEX};
+
+
+
+typedef SIMD(*ISIMDNoise3d)(SIMD* x, SIMD* y, SIMD* z);
+typedef float(*INoise3d)(float x, float y, float z);
+
+typedef void(*ISIMDFractal3d)(SIMD* out,Settings*,ISIMDNoise3d);
+typedef float(*IFractal3d)(float, float, float, float, float, float, int, float,INoise3d);
+
+
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo, pscale, poffset, F3, G3,G32,G33;
 
-typedef void(*ISIMDNoise)(SIMD*, Settings*);
-typedef float(*INoise)(float, float, float, float, float, float, int, float);
 
 FAST_NOISE_DLL_API inline extern void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
 inline extern void initSIMDSimplex();
 const float pi = 3.141593;
 const float twopi = 6.283185;
+
 
 
 
