@@ -13,7 +13,7 @@ feel free to add other SIMD platforms and pull request!
 FastNoise3d.h / cpp
 -------------------
 The base Perlin and Simplex noise functions, provided in both SIMD and non SIMD form.
- (simplex non simd coming soon!)
+ 
 
 FractalNoise3d.h / cpp
 ----------------------
