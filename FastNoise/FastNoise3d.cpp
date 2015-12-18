@@ -10,18 +10,19 @@ inline SIMD dot(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
 	SIMD xx = Mul(x1, x2);
 	SIMD yy = Mul(y1, y2);
 	SIMD zz = Mul(z1, z2);
-	return Add(zz, Add(yy, zz));
+	return Add(xx, Add(yy, zz));
 }
 
 inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	uSIMDi i, j, k;
 
-	SIMD s = Mul(F3, Add(*x, Add(*y, *z)));
+	uSIMD s;
+	s.m = Mul(F3, Add(*x, Add(*y, *z)));
 
 #ifdef SSE41
-	i.m = ConvertToInt(Floor(Add(*x,s)));
-	j.m = ConvertToInt(Floor(Add(*y,s)));
-	k.m = ConvertToInt(Floor(Add(*z,s)));
+	i.m = ConvertToInt(Floor(Add(*x,s.m)));
+	j.m = ConvertToInt(Floor(Add(*y,s.m)));
+	k.m = ConvertToInt(Floor(Add(*z,s.m)));
 #endif
 	//drop out to scalar if we don't
 #ifndef SSE41
@@ -30,9 +31,9 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	uSIMD* uz = z;
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
-		i.a[i] = FASTFLOOR((*ux).a[i]);
-		j.a[i] = FASTFLOOR((*uy).a[i]);
-		k.a[i] = FASTFLOOR((*uz).a[i]);
+		i.a[i] = FASTFLOOR((*ux).a[i]+s.a[i]);
+		j.a[i] = FASTFLOOR((*uy).a[i]+s.a[i]);
+		k.a[i] = FASTFLOOR((*uz).a[i]+s.a[i]);
 	}
 #endif
 
@@ -82,15 +83,15 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	// a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
 	// a step of (0,0,1) in (i,j,k) means a step of (-c,-c,1-c) in (x,y,z), where
 	// c = 1/6. -Stefan Gustavson (stegu@itn.liu.se).
-	SIMD x1 = Sub(x0, Add(ConvertToFloat(i1), G3));
-	SIMD y1 = Sub(y0, Add(ConvertToFloat(j1), G3));
-	SIMD z1 = Sub(z0, Add(ConvertToFloat(k1), G3));
-	SIMD x2 = Sub(x0, Add(ConvertToFloat(i2), G32));
-	SIMD y2 = Sub(y0, Add(ConvertToFloat(j2), G32));
-	SIMD z2 = Sub(z0, Add(ConvertToFloat(k2), G32));
-	SIMD x3 = Sub(x0, Add(onef, G33));
-	SIMD y3 = Sub(y0, Add(onef, G33));
-	SIMD z3 = Sub(z0, Add(onef, G33));
+	SIMD x1 = Add(Sub(x0, ConvertToFloat(i1)), G3);
+	SIMD y1 = Add(Sub(y0, ConvertToFloat(j1)), G3);
+	SIMD z1 = Add(Sub(z0, ConvertToFloat(k1)), G3);
+	SIMD x2 = Add(Sub(x0, ConvertToFloat(i2)), G32);
+	SIMD y2 = Add(Sub(y0, ConvertToFloat(j2)), G32);
+	SIMD z2 = Add(Sub(z0, ConvertToFloat(k2)), G32);
+	SIMD x3 = Add(Sub(x0, onef), G33);
+	SIMD y3 = Add(Sub(y0, onef), G33);
+	SIMD z3 = Add(Sub(z0, onef), G33);
 
 
 	SIMDi ii = Andi(i.m, ff);
@@ -118,6 +119,7 @@ inline SIMD simlpexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	SIMDi gi3 = Gather(permMOD12, Addi(ii, pjj1), 4);
 
 	//ti = .6 - xi*xi - yi*yi - zi*zi
+	
 	SIMD t0 = Sub(Sub(Sub(psix, Mul(x0, x0)), Mul(y0, y0)), Mul(z0, z0));
 	SIMD t1 = Sub(Sub(Sub(psix, Mul(x1, x1)), Mul(y1, y1)), Mul(z1, z1));
 	SIMD t2 = Sub(Sub(Sub(psix, Mul(x2, x2)), Mul(y2, y2)), Mul(z2, z2));
@@ -704,7 +706,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	unsigned cpuCount = 1;// std::thread::hardware_concurrency();
+	unsigned cpuCount =  std::thread::hardware_concurrency();
 	
 	std::thread* threads = new std::thread[cpuCount];
 	int start = 0;

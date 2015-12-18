@@ -165,33 +165,27 @@ inline extern void initSIMDSimplex();
 const float pi = 3.141593;
 const float twopi = 6.283185;
 
-typedef struct Grad
-{
-	SIMD x;
-	SIMD y;
-	SIMD z;
 
-	Grad(float xx, float yy, float zz)
-	{
-		x = SetOne(xx);
-		y = SetOne(yy);
-		z = SetOne(zz);
-	}
-} Grad;
 
 const float gradX[] =
 {
-	1,-1,1,-1,1,-1,1,-1,0,0,0,0
+	1,-1, 1,-1,
+	1,-1, 1,-1,
+	0, 0, 0, 0
 };
 
 const float gradY[] =
 {
-	1,1,-1,-2,0,0,0,0,1,-1,1,-1
+	1, 1,-1,-1,
+	0, 0, 0, 0,
+	1,-1, 1,-1
 };
 
 const float gradZ[] =
 {
-	0,0,0,0,1,1,-1,-1,1,1,-1,-1
+	0, 0, 0, 0,
+	1, 1,-1,-1,
+	1, 1,-1,-1
 };
 
 
