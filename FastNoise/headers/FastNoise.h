@@ -18,14 +18,7 @@
 **/
 
 
-// For non SIMD only
-#define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
-#define DERIVFADE(t) (t * t * ( t *(30 * t - 60 ) + 30) )
-#define FASTFLOOR(x) ( ((x)>0) ? ((int)x) : ((int)x-1 ) )
-#define LERP(t, a, b) ((a) + (t)*((b)-(a)))
 
-#define SCALE 1.754f
-#define OFFSET .05f
 
 #define SSE2  //indicates we want SSE2
 #define SSE41 //indicates we want SSE4.1 instructions (floor is available)
@@ -126,6 +119,12 @@ typedef __m256i SIMDi;
 
 
 
+#define SCALE 1.754f
+#define OFFSET .05f
+#define PI 3.141593f
+#define TWOPI 6.283185f
+
+
 //We use this union hack for easy
 //access to the floats for unvectorizeable
 //lookup table access
@@ -171,8 +170,6 @@ extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo, pscale, po
 
 FAST_NOISE_DLL_API inline extern void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
 inline extern void initSIMDSimplex();
-const float pi = 3.141593;
-const float twopi = 6.283185;
 
 
 

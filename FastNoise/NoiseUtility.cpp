@@ -18,7 +18,7 @@ void CleanUpNoise(float * resultArray)
 //Thread helper function for 2d texture that wraps on sphere
 void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Settings* S, float* xcos, float* ysin, ISIMDFractal3d fractalFunction,ISIMDNoise3d noiseFunction, SIMD* result, float *outMin, float *outMax)
 {
-	const float piOverHeight = pi / (height + 1);
+	const float piOverHeight = PI / (height + 1);
 	float phi = piOverHeight*start;
 	float sinPhi;
 
@@ -115,7 +115,7 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 
 	//set up spherical stuff
 	int count = 0;
-	const float twoPiOverWidth = twopi / width;
+	const float twoPiOverWidth = TWOPI / width;
 	float theta = 0;
 
 	float* xcos = new float[width];
@@ -136,8 +136,9 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	int start = 0;
 	float* min = new float[cpuCount];
 	float* max = new float[cpuCount];
-	Settings* S = new Settings[cpuCount];
-	for (int i = 0; i < cpuCount; i++)
+	
+	Settings* S = (Settings*)_aligned_malloc(cpuCount* sizeof(Settings), MEMORY_ALIGNMENT);
+	for (unsigned i = 0; i < cpuCount; i++)
 	{
 		initSIMD(&S[i], frequency, lacunarity, offset, gain, octaves);
 		int end = start + (height / cpuCount);		
@@ -149,17 +150,17 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	//Get the min of mins and max of maxes so consumers of this can normalize the output if desired
 	*outMin = 999;
 	*outMax = -999;
-	for (int i = 0; i < cpuCount; i++)
+	for (unsigned i = 0; i < cpuCount; i++)
 	{
 		threads[i].join();
 		*outMin = fminf(*outMin, min[i]);
 		*outMax = fmaxf(*outMax, max[i]);
 	}
+	_aligned_free(S);
 	delete[] xcos;
 	delete[] ysin;
 	delete[] min;
-	delete[] max;
-	delete[] S;
+	delete[] max;	
 	delete[] threads;
 	return (float*)result;
 
@@ -196,8 +197,8 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 
 	//set up spherical stuff
 	int count = 0;
-	const float piOverHeight = pi / (height + 1);
-	const float twoPiOverWidth = twopi / width;
+	const float piOverHeight = PI / (height + 1);
+	const float twoPiOverWidth = TWOPI / width;
 	float phi = 0;
 	float x3d, y3d, z3d;
 	float sinPhi, theta;

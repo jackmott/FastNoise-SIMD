@@ -40,9 +40,7 @@ extern inline void initSIMD(Settings *S, float frequency, float lacunarity, floa
 	pscale = SetOne(SCALE);
 	poffset = SetOne(OFFSET);
 
-	
-	
-	
+			
 }
 
 inline void initSIMDSimplex()

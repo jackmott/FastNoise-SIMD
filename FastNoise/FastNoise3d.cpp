@@ -1,5 +1,13 @@
 #include "headers\FastNoise3d.h"
 
+
+// For non SIMD only
+#define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
+#define DERIVFADE(t) (t * t * ( t *(30 * t - 60 ) + 30) )
+#define FASTFLOOR(x) (int)( ((x)>0) ? ((int)x) : ((int)x-1 ) )
+#define LERP(t, a, b) ((a) + (t)*((b)-(a)))
+
+
 inline SIMD dotSIMD(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
 {
 	SIMD xx = Mul(x1, x2);
@@ -272,33 +280,33 @@ inline float simplex3d(float x, float y, float z)
 	int gi2 = permMOD12[ii + i2 + perm[jj + j2 + perm[kk + k2]]];
 	int gi3 = permMOD12[ii + 1 + perm[jj + 1 + perm[kk + 1]]];
 	// Calculate the contribution from the four corners
-	float t0 = 0.6 - x0*x0 - y0*y0 - z0*z0;
-	if (t0<0) n0 = 0.0;
+	float t0 = 0.6f - x0*x0 - y0*y0 - z0*z0;
+	if (t0<0) n0 = 0.0f;
 	else {
 		t0 *= t0;
 		n0 = t0 * t0 * dot(gradX[gi0],gradY[gi0],gradZ[gi0], x0, y0, z0);
 	}
-	float t1 = 0.6 - x1*x1 - y1*y1 - z1*z1;
-	if (t1<0) n1 = 0.0;
+	float t1 = 0.6f - x1*x1 - y1*y1 - z1*z1;
+	if (t1<0) n1 = 0.0f;
 	else {
 		t1 *= t1;
 		n1 = t1 * t1 * dot(gradX[gi1], gradY[gi1], gradZ[gi1], x1, y1, z1);
 	}
-	float t2 = 0.6 - x2*x2 - y2*y2 - z2*z2;
-	if (t2<0) n2 = 0.0;
+	float t2 = 0.6f - x2*x2 - y2*y2 - z2*z2;
+	if (t2<0) n2 = 0.0f;
 	else {
 		t2 *= t2;
 		n2 = t2 * t2 * dot(gradX[gi2], gradY[gi2], gradZ[gi2], x2, y2, z2);
 	}
-	float t3 = 0.6 - x3*x3 - y3*y3 - z3*z3;
-	if (t3<0) n3 = 0.0;
+	float t3 = 0.6f - x3*x3 - y3*y3 - z3*z3;
+	if (t3<0) n3 = 0.0f;
 	else {
 		t3 *= t3;
 		n3 = t3 * t3 * dot(gradX[gi3], gradY[gi3], gradZ[gi3], x3, y3, z3);
 	}
 	// Add contributions from each corner to get the final noise value.
 	// The result is scaled to stay just inside [-1,1]
-	return 32.0*(n0 + n1 + n2 + n3);
+	return 32.0f*(n0 + n1 + n2 + n3);
 }
 
 //---------------------------------------------------------------------
