@@ -61,8 +61,10 @@ typedef __m128i SIMDi;
 #define Equali(x,y) _mm_cmpeq_epi32(x,y)
 #define GreaterThan(x,y) _mm_cmpgt_ps(x,y)
 #define GreaterThani(x,y) _mm_cmpgt_epi32(x,y)
+#define GreaterThanOrEq(x,y) _mm_cmpge_ps(x,y)
 #define LessThan(x,y) _mm_cmplt_ps(x,y)
 #define LessThani(x,y) _mm_cmpgt_epi32(y,x) 
+#define LessThanOrEq(x,y) _mm_cmple_ps(x,y)
 #define NotEqual(x,y) _mm_cmpneq_ps(x,y)
 #define Floor(x) _mm_floor_ps(x)
 #define Max(x,y) _mm_max_ps(x,y)
@@ -108,6 +110,8 @@ typedef __m256i SIMDi;
 #define GreaterThani(x,y) _mm256_cmpgt_epi32(x,y)
 #define LessThan(x,y) _mm256_cmp_ps(x,y,_CMP_LT_OQ)
 #define LessThani(x,y) _mm256_cmpgt_epi32(y,x) 
+#define LessThanOrEq(x,y) _mm256_cmp_ps(x,y,_CMP_LE_OQ)
+#define GreaterThanOrEq(x,y) _mm256_cmp_ps(x,y,_CMP_GE_OQ)
 #define NotEqual(x,y) _mm256_cmp_ps(x,y,_CMP_NEQ_OQ)
 #define Floor(x) _mm256_floor_ps(x)
 #define Max(x,y) _mm256_max_ps(x,y)
@@ -168,8 +172,8 @@ extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo, pscale, poffset, F3, G3,G32,G33;
 
 
-FAST_NOISE_DLL_API inline extern void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves);
-inline extern void initSIMDSimplex();
+FAST_NOISE_DLL_API inline extern void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves);
+FAST_NOISE_DLL_API inline extern void initSIMDSimplex();
 
 
 

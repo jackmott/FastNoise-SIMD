@@ -4,9 +4,14 @@
 // For non SIMD only
 #define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
 #define DERIVFADE(t) (t * t * ( t *(30 * t - 60 ) + 30) )
-#define FASTFLOOR(x) (int)( ((x)>0) ? ((int)x) : ((int)x-1 ) )
 #define LERP(t, a, b) ((a) + (t)*((b)-(a)))
 
+
+
+inline int fastFloor(float x) {
+	int xi = (int)x;
+	return x<xi ? xi - 1 : xi;
+}
 
 inline SIMD dotSIMD(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
 {
@@ -35,9 +40,9 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	uSIMD* uz = z;
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
-		i.a[i] = FASTFLOOR((*ux).a[i]+s.a[i]);
-		j.a[i] = FASTFLOOR((*uy).a[i]+s.a[i]);
-		k.a[i] = FASTFLOOR((*uz).a[i]+s.a[i]);
+		i.a[i] = fastFloor((*ux).a[i]+s.a[i]);
+		j.a[i] = fastFloor((*uy).a[i]+s.a[i]);
+		k.a[i] = fastFloor((*uz).a[i]+s.a[i]);
 	}
 #endif
 
@@ -63,21 +68,21 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	y>x>z -> 010  110
 	*/
 	uSIMDi i1, i2, j1, j2, k1, k2;
-	i1.m = Andi(one, Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(z0, x0))));
-	j1.m = Andi(one, Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(z0, y0))));
-	k1.m = Andi(one, Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(y0, z0))));
+	i1.m = Andi(one, Andi(CastToInt(GreaterThanOrEq(x0, y0)), CastToInt(GreaterThanOrEq(x0, z0))));
+	j1.m = Andi(one, Andi(CastToInt(GreaterThan(y0, x0)), CastToInt(GreaterThan(y0, z0))));
+	k1.m = Andi(one, Andi(CastToInt(GreaterThan(z0, x0)), CastToInt(GreaterThan(z0, y0))));
 
 	//for i2
-	SIMDi yx_xz = Andi(CastToInt(LessThan(y0, x0)), CastToInt(LessThan(x0, z0)));
-	SIMDi zx_xy = Andi(CastToInt(LessThan(z0, x0)), CastToInt(LessThan(x0, y0)));
+	SIMDi yx_xz = Andi(CastToInt(GreaterThanOrEq(x0, y0)), CastToInt(LessThan(x0, z0)));
+	SIMDi zx_xy = Andi(CastToInt(GreaterThanOrEq(x0, z0)), CastToInt(LessThan(x0, y0)));
 
 	//for j2
 	SIMDi xy_yz = Andi(CastToInt(LessThan(x0, y0)), CastToInt(LessThan(y0, z0)));
-	SIMDi zy_yx = Andi(CastToInt(LessThan(z0, y0)), CastToInt(LessThan(y0, x0)));
+	SIMDi zy_yx = Andi(CastToInt(GreaterThanOrEq(y0, z0)), CastToInt(GreaterThanOrEq(x0, y0)));
 
 	//for k2
-	SIMDi yz_zx = Andi(CastToInt(LessThan(y0, z0)), CastToInt(LessThan(z0, x0)));
-	SIMDi xz_zy = Andi(CastToInt(LessThan(x0, z0)), CastToInt(LessThan(z0, y0)));
+	SIMDi yz_zx = Andi(CastToInt(LessThan(y0, z0)), CastToInt(GreaterThanOrEq(x0, z0)));
+	SIMDi xz_zy = Andi(CastToInt(LessThan(x0, z0)), CastToInt(GreaterThanOrEq(y0, z0)));
 
 	i2.m = Andi(one, Ori(i1.m, Ori(yx_xz, zx_xy)));
 	j2.m = Andi(one, Ori(j1.m, Ori(xy_yz, zy_yx)));
@@ -226,14 +231,15 @@ const float g32 = g3*2.0f;
 const float g33 = g3*3.0f;
 const float f3 = 1.0f / 3.0f;
 
+
 inline float simplex3d(float x, float y, float z)
 {
 	float n0, n1, n2, n3; // Noise contributions from the four corners
 						   // Skew the input space to determine which simplex cell we're in
 	float s = (x + y + z)*f3; // Very nice and simple skew factor for 3D
-	int i = FASTFLOOR(x + s);
-	int j = FASTFLOOR(y + s);
-	int k = FASTFLOOR(z + s);
+	int i = fastFloor((x + s));
+	int j = fastFloor(y + s);
+	int k = fastFloor(z + s);
 	float t = (i + j + k)*g3;
 	float X0 = i - t; // Unskew the cell origin back to (x,y,z) space
 	float Y0 = j - t;
@@ -246,17 +252,26 @@ inline float simplex3d(float x, float y, float z)
 	int i1, j1, k1; // Offsets for second corner of simplex in (i,j,k) coords
 	int i2, j2, k2; // Offsets for third corner of simplex in (i,j,k) coords
 	if (x0 >= y0) {
-		if (y0 >= z0)
-		{
+		if (y0 >= z0) {
 			i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 1; k2 = 0;
 		} // X Y Z order
-		else if (x0 >= z0) { i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1; } // X Z Y order
-		else { i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1; } // Z X Y order
+		else if (x0 >= z0) { 
+			i1 = 1; j1 = 0; k1 = 0; i2 = 1; j2 = 0; k2 = 1; 
+		} // X Z Y order
+		else { 
+			i1 = 0; j1 = 0; k1 = 1; i2 = 1; j2 = 0; k2 = 1; 
+		} // Z X Y order
 	}
 	else { // x0<y0
-		if (y0<z0) { i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1; } // Z Y X order
-		else if (x0<z0) { i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1; } // Y Z X order
-		else { i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; } // Y X Z order
+		if (y0<z0) { 
+			i1 = 0; j1 = 0; k1 = 1; i2 = 0; j2 = 1; k2 = 1; 
+		} // Z Y X order
+		else if (x0<z0) { 
+			i1 = 0; j1 = 1; k1 = 0; i2 = 0; j2 = 1; k2 = 1; 
+		} // Y Z X order
+		else { 
+			i1 = 0; j1 = 1; k1 = 0; i2 = 1; j2 = 1; k2 = 0; 
+		} // Y X Z order
 	}
 	// A step of (1,0,0) in (i,j,k) means a step of (1-c,-c,-c) in (x,y,z),
 	// a step of (0,1,0) in (i,j,k) means a step of (-c,1-c,-c) in (x,y,z), and
@@ -337,7 +352,7 @@ inline float grad3d(int hash, float x, float y, float z) {
 }
 
 
-inline SIMD gradSIMD3d(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
+inline SIMD gradSIMD3d(SIMDi * __restrict hash, SIMD * __restrict x, SIMD * __restrict y, SIMD * __restrict z) {
 
 	SIMDi h = Andi(*hash, fifteeni);
 	SIMD h1 = ConvertToFloat(Equali(zeroi, Andi(h, one)));
@@ -362,7 +377,7 @@ inline SIMD gradSIMD3d(SIMDi *hash, SIMD *x, SIMD *y, SIMD *z) {
 }
 
 
-inline SIMD perlinSIMD3d(SIMD* x, SIMD* y, SIMD* z)
+inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restrict z)
 {
 	uSIMDi ix0, iy0, ix1, iy1, iz0, iz1;
 	SIMD fx0, fy0, fz0, fx1, fy1, fz1;
@@ -380,9 +395,9 @@ inline SIMD perlinSIMD3d(SIMD* x, SIMD* y, SIMD* z)
 	uSIMD* uz = z;
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
-		ix0.a[i] = FASTFLOOR((*ux).a[i]);
-		iy0.a[i] = FASTFLOOR((*uy).a[i]);
-		iz0.a[i] = FASTFLOOR((*uz).a[i]);
+		ix0.a[i] = fastFloor((*ux).a[i]);
+		iy0.a[i] = fastFloor((*uy).a[i]);
+		iz0.a[i] = fastFloor((*uz).a[i]);
 	}
 #endif
 
@@ -523,9 +538,9 @@ inline float perlin3d(float x, float y, float z)
 	float s, t, r;
 	float nxy0, nxy1, nx0, nx1, n0, n1;
 
-	ix0 = FASTFLOOR(x); // (int)x; // Integer part of x
-	iy0 = FASTFLOOR(y); // Integer part of y
-	iz0 = FASTFLOOR(z); // Integer part of z
+	ix0 = fastFloor(x); // (int)x; // Integer part of x
+	iy0 = fastFloor(y); // Integer part of y
+	iz0 = fastFloor(z); // Integer part of z
 	fx0 = x - ix0;        // Fractional part of x
 	fy0 = y - iy0;        // Fractional part of y
 	fz0 = z - iz0;        // Fractional part of z

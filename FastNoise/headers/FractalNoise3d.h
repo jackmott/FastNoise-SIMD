@@ -8,11 +8,11 @@
 extern "C"
 {
 	
-	FAST_NOISE_DLL_API inline extern void fbmSIMD3d(SIMD* out, Settings* S,ISIMDNoise3d noise);
-	FAST_NOISE_DLL_API inline extern void plainSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise);
+	FAST_NOISE_DLL_API inline extern void fbmSIMD3d(SIMD* __restrict out, Settings* __restrict S,ISIMDNoise3d noise);
+	FAST_NOISE_DLL_API inline extern void plainSIMD3d(SIMD* __restrict out, Settings* __restrict S, ISIMDNoise3d noise);
 	FAST_NOISE_DLL_API inline extern void turbulenceSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise);
 	FAST_NOISE_DLL_API inline extern void ridgeSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise);
-	FAST_NOISE_DLL_API inline extern void ridgePlainSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise);
+	FAST_NOISE_DLL_API inline extern void ridgePlainSIMD3d(SIMD* __restrict out, Settings* __restrict S, ISIMDNoise3d noise);
 
 
 	FAST_NOISE_DLL_API inline extern float fbm3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset,INoise3d noise);

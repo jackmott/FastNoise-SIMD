@@ -1,5 +1,5 @@
-#include <thread>
 #include "headers\NoiseUtility.h"
+#include <stdio.h>
 
 
 //Must be called by the caller of noise producing functions
@@ -15,56 +15,10 @@ void CleanUpNoise(float * resultArray)
 }
 
 
-//Thread helper function for 2d texture that wraps on sphere
-void SphereSurfaceNoiseSIMDThread(int start, int end, int width, int height, Settings* S, float* xcos, float* ysin, ISIMDFractal3d fractalFunction,ISIMDNoise3d noiseFunction, SIMD* result, float *outMin, float *outMax)
-{
-	const float piOverHeight = PI / (height + 1);
-	float phi = piOverHeight*start;
-	float sinPhi;
-
-	int count = start*width / VECTOR_SIZE;
-
-	uSIMD min;
-	uSIMD max;
-	min.m = SetOne(999);
-	max.m = SetOne(-999);
-	//Platforms which have SIMD cos/sin can vectorize this
-	for (int y = start; y < end; y = y + 1)
-	{
-		phi = phi + piOverHeight;
-		S->z.m = SetOne(cosf(phi));
-		sinPhi = sinf(phi);
-
-
-		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
-		{			
-			for (int j = 0; j < VECTOR_SIZE; j++)
-			{
-				S->x.a[j] = xcos[x + j] * sinPhi;
-				S->y.a[j] = ysin[x + j] * sinPhi;
-
-			}
-
-			fractalFunction(&result[count],S,noiseFunction);
-			min.m = Min(min.m, result[count]);
-			max.m = Max(max.m, result[count]);
-			count = count + 1;
-		}
-	}
-
-	*outMin = 999;
-	*outMax = -999;
-	for (int i = 0; i < VECTOR_SIZE; i++)
-	{
-		*outMin = fminf(*outMin, min.a[i]);
-		*outMax = fmaxf(*outMax, max.a[i]);
-	}
-
-}
 
 
 //Multithreaded function to get a 2d texture that maps on a sphere
-float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int fractalType, int noiseType, float* outMin, float *outMax)
+float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacunarity, float frequency, float gain, float offset, int fractalType, int noiseType, float* __restrict outMin, float * __restrict outMax)
 {
 	//SIMD data has to be aligned
 	SIMD* result = (SIMD*)_aligned_malloc(width*height*  sizeof(float), MEMORY_ALIGNMENT);
@@ -112,15 +66,16 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	}
 	}
 	
+	float* __restrict xcos = new float[width];
+	float* __restrict ysin = new float[width];
 
-	//set up spherical stuff
-	int count = 0;
+
 	const float twoPiOverWidth = TWOPI / width;
+	const float piOverHeight = PI / height;
+	float phi = 0;
+	float sinPhi;
+	int count = 0;
 	float theta = 0;
-
-	float* xcos = new float[width];
-	float* ysin = new float[width];
-
 	for (int x = 0; x < width; x = x + 1)
 	{
 		theta = theta + twoPiOverWidth;
@@ -128,40 +83,47 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 		ysin[x] = sinf(theta);
 	}
 
-	//See how many logical cores we have and create that many threads
-	unsigned cpuCount =  std::thread::hardware_concurrency();
-	std::thread* threads = new std::thread[cpuCount];
-
-	//Break up the problem into cpuCount pieces for each thread
-	int start = 0;
-	float* min = new float[cpuCount];
-	float* max = new float[cpuCount];
-	
-	Settings* S = (Settings*)_aligned_malloc(cpuCount* sizeof(Settings), MEMORY_ALIGNMENT);
-	for (unsigned i = 0; i < cpuCount; i++)
+	Settings S;
+	initSIMD(&S, frequency, lacunarity, offset, gain, octaves);
+		
+	uSIMD min;
+	uSIMD max;
+	min.m = SetOne(999);
+	max.m = SetOne(-999);
+	//Platforms which have SIMD cos/sin can vectorize this
+	for (int y = 0; y < height; y = y + 1)
 	{
-		initSIMD(&S[i], frequency, lacunarity, offset, gain, octaves);
-		int end = start + (height / cpuCount);		
-		threads[i] = std::thread(SphereSurfaceNoiseSIMDThread, start, end, width, height, &S[i], xcos, ysin, fractalFunction,noiseFunction, result, &min[i], &max[i]);
-		start = end;
+		phi = phi + piOverHeight;
+		S.z.m = SetOne(cosf(phi));
+		sinPhi = sinf(phi);
+
+		for (int x = 0; x < width - (VECTOR_SIZE - 1); x = x + VECTOR_SIZE)
+		{
+			for (int j = 0; j < VECTOR_SIZE; j++)
+			{
+				S.x.a[j] = xcos[x + j] * sinPhi;
+				S.y.a[j] = ysin[x + j] * sinPhi;
+			}
+
+			fractalFunction(&result[count], &S, noiseFunction);
+		
+			min.m = Min(min.m, result[count]);
+			max.m = Max(max.m, result[count]);
+			count = count + 1;
+		}
 	}
 
-
-	//Get the min of mins and max of maxes so consumers of this can normalize the output if desired
 	*outMin = 999;
 	*outMax = -999;
-	for (unsigned i = 0; i < cpuCount; i++)
+	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
-		threads[i].join();
-		*outMin = fminf(*outMin, min[i]);
-		*outMax = fmaxf(*outMax, max[i]);
+		*outMin = fminf(*outMin, min.a[i]);
+		*outMax = fmaxf(*outMax, max.a[i]);
 	}
-	_aligned_free(S);
+	
 	delete[] xcos;
 	delete[] ysin;
-	delete[] min;
-	delete[] max;	
-	delete[] threads;
+	
 	return (float*)result;
 
 }

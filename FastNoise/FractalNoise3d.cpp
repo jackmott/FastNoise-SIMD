@@ -1,22 +1,24 @@
 #include "headers\FractalNoise3d.h"
-
+#include <stdio.h>
 //If you ever call something with 1 octave, call this instead
-inline void plainSIMD3d(SIMD* out, Settings* S,ISIMDNoise3d noise )
+ void plainSIMD3d(SIMD* out, Settings*  S,ISIMDNoise3d noise )
 {
+
 	SIMD vfx = Mul(S->x.m, S->frequency);
 	SIMD vfy = Mul(S->y.m, S->frequency);
 	SIMD vfz = Mul(S->z.m, S->frequency);
+
 	*out = noise(&vfx, &vfy, &vfz);
 }
 
-inline float plain3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset,INoise3d noise)
+ float plain3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset,INoise3d noise)
 {
 	return noise(x*frequency, y*frequency, z*frequency);
 }
 
 
 
-inline void ridgePlainSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
+ void ridgePlainSIMD3d(SIMD* __restrict out, Settings* __restrict S, ISIMDNoise3d noise)
 {
 	SIMD vfx = Mul(S->x.m, S->frequency);
 	SIMD vfy = Mul(S->y.m, S->frequency);
@@ -27,7 +29,7 @@ inline void ridgePlainSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
 
 }
 
-inline float ridgePlain3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
+ float ridgePlain3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
 {
 	return (float)fabs(noise(x*frequency, y*frequency, z*frequency));
 }
@@ -35,7 +37,7 @@ inline float ridgePlain3d(float x, float y, float z, float lacunarity, float gai
 
 
 //Fractal brownian motions using SIMD
-inline void fbmSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
+ void fbmSIMD3d(SIMD* __restrict out, Settings* __restrict S, ISIMDNoise3d noise)
 {
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
@@ -54,7 +56,7 @@ inline void fbmSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
 }
 
 //fractal brownian motion without SIMD
-inline float fbm3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset, INoise3d noise)
+ float fbm3d(float x, float y, float z, float frequency, float lacunarity, float gain, int octaves, float offset, INoise3d noise)
 {
 	float sum = 0;
 	float amplitude = 1.0f;
@@ -69,7 +71,7 @@ inline float fbm3d(float x, float y, float z, float frequency, float lacunarity,
 
 
 //turbulence  using SIMD
-inline void turbulenceSIMD3d(SIMD *out,Settings* S, ISIMDNoise3d noise)
+ void turbulenceSIMD3d(SIMD *out,Settings* S, ISIMDNoise3d noise)
 {
 	SIMD amplitude, localFrequency;
 	*out = SetZero();
@@ -89,7 +91,7 @@ inline void turbulenceSIMD3d(SIMD *out,Settings* S, ISIMDNoise3d noise)
 	}	
 }
 
-inline float turbulence3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
+ float turbulence3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
 {
 	float sum = 0;
 	float amplitude = 1;
@@ -103,7 +105,7 @@ inline float turbulence3d(float x, float y, float z, float lacunarity, float gai
 }
 
 
-inline void ridgeSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
+ void ridgeSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
 {
 	SIMD amplitude, prev, localFrequency;
 	*out = SetZero();
@@ -130,7 +132,7 @@ inline void ridgeSIMD3d(SIMD* out, Settings* S, ISIMDNoise3d noise)
 	
 }
 
-inline float ridge3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
+ float ridge3d(float x, float y, float z, float lacunarity, float gain, float frequency, int octaves, float offset, INoise3d noise)
 {
 	float sum = 0;
 	float amplitude = 0.5f;

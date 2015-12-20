@@ -9,7 +9,7 @@
 SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 SIMD minusonef, zero,psix, onef, six, fifteen, ten,thirtytwo, pscale, poffset, F3, G3,G32,G33;
 
-extern inline void initSIMD(Settings *S, float frequency, float lacunarity, float offset, float gain, int octaves)
+extern inline void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves)
 {
 	S->frequency = SetOne(frequency);
 	S->lacunarity = SetOne(lacunarity);
