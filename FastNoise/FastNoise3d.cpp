@@ -60,12 +60,12 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	//The following mess accomplishes this transofmration without branching
 	//Because we can't branch in SIMD -Jack Mott
 	/*       ijk1 ijk2
-	x>y>z -> 100  110
-	x>z>y -> 100  101
-	z>x>y -> 001  101
-	z>y>x -> 001  011
-	y>z>x -> 010  011
-	y>x>z -> 010  110
+	x>=y>=z -> 100  110
+	x>z>y   -> 100  101
+	z>x>y   -> 001  101
+	z>y>x   -> 001  011
+	y>z>x   -> 010  011
+	y>x>=z  -> 010  110
 	*/
 	uSIMDi i1, i2, j1, j2, k1, k2;
 	i1.m = Andi(one, Andi(CastToInt(GreaterThanOrEq(x0, y0)), CastToInt(GreaterThanOrEq(x0, z0))));
