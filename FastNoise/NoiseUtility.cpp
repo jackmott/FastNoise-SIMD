@@ -136,7 +136,7 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 	INoise3d noiseFunction;
 	IFractal3d fractalFunction;
 
-	switch ((NoiseType)fractalType)
+	switch ((FractalType)fractalType)
 	{
 	case FBM: fractalFunction = fbm3d; break;
 	case TURBULENCE: fractalFunction = turbulence3d; break;
