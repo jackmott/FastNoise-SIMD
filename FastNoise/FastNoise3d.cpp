@@ -13,7 +13,7 @@ inline int fastFloor(float x) {
 	return x<xi ? xi - 1 : xi;
 }
 
-inline SIMD dotSIMD(SIMD x1, SIMD y1, SIMD z1, SIMD x2, SIMD y2, SIMD z2)
+inline SIMD dotSIMD(const SIMD &x1,const SIMD &y1, const SIMD &z1,const SIMD &x2,const SIMD &y2,const SIMD &z2)
 {
 	SIMD xx = Mul(x1, x2);
 	SIMD yy = Mul(y1, y2);
