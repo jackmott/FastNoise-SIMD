@@ -70,8 +70,8 @@ float* GetSphereSurfaceNoiseSIMD(int width, int height, int octaves, float lacun
 	float* __restrict ysin = new float[width];
 
 
-	const float twoPiOverWidth = TWOPI / width;
-	const float piOverHeight = PI / height;
+	static const float twoPiOverWidth = TWOPI / width;
+	static const float piOverHeight = PI / height;
 	float phi = 0;
 	float sinPhi;
 	int count = 0;
@@ -159,8 +159,8 @@ float* GetSphereSurfaceNoise(int width, int height, int octaves, float lacunarit
 
 	//set up spherical stuff
 	int count = 0;
-	const float piOverHeight = PI / (height + 1);
-	const float twoPiOverWidth = TWOPI / width;
+	static const float piOverHeight = PI / (height + 1);
+	static const float twoPiOverWidth = TWOPI / width;
 	float phi = 0;
 	float x3d, y3d, z3d;
 	float sinPhi, theta;

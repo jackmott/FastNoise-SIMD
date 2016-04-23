@@ -143,6 +143,7 @@
 		r = offset - r;
 		r = r*r;
 		sum += r*amplitude*prev;
+		prev = r;
 		frequency *= lacunarity;
 		amplitude *= gain;
 	}
