@@ -113,7 +113,7 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 	uSIMDi kk;
 	kk.m = Andi(k.m, ff);
 	uSIMDi gi0, gi1, gi2, gi3;
-#ifndef USEGATHER
+#ifndef AVX2
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
 		gi0.a[i] = permMOD12[ii.a[i] + perm[jj.a[i] + perm[kk.a[i]]]];
@@ -121,8 +121,7 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 		gi2.a[i] = permMOD12[ii.a[i] + i2.a[i] + perm[jj.a[i] + j2.a[i] + perm[kk.a[i]+k2.a[i]]]];
 		gi3.a[i] = permMOD12[ii.a[i] + 1 + perm[jj.a[i] + 1 + perm[kk.a[i]]]];
 	}
-#endif
-#ifdef USEGATHER
+#else
 	SIMDi pkk = Gather(perm, kk.m, 4);	
 	SIMDi pkkk1 = Gather(perm, Addi(kk.m, k1.m), 4);
 	SIMDi pkkk2 = Gather(perm, Addi(kk.m, k2.m), 4);
