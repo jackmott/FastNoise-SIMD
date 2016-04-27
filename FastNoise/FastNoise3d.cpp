@@ -321,9 +321,8 @@ inline float simplex3d(float x, float y, float z)
 		t3 *= t3;
 		n3 = t3 * t3 * dot(gradX[gi3], gradY[gi3], gradZ[gi3], x3, y3, z3);
 	}
-	// Add contributions from each corner to get the final noise value.
-	// The result is scaled to stay just inside [-1,1]
-	return 32.0f*(n0 + n1 + n2 + n3);
+	// Add contributions from each corner to get the final noise value.	
+	return n0 + n1 + n2 + n3;
 }
 
 //---------------------------------------------------------------------
@@ -521,7 +520,7 @@ inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restric
 
 	SIMD n1 = Add(nx0, Mul(t, Sub(nx1, nx0)));
 
-	return  Mul(Sub(Add(n0, Mul(s, Sub(n1, n0))),poffset),pscale);
+	return  Add(n0, Mul(s, Sub(n1, n0)));
 
 }
 
@@ -582,7 +581,7 @@ inline float perlin3d(float x, float y, float z)
 
 
 
-	return (LERP(s, n0, n1) - OFFSET)*SCALE;
+	return LERP(s, n0, n1);
 }
 
 

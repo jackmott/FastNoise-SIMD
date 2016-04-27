@@ -141,9 +141,6 @@ typedef __m256i SIMDi; //for integers
 #endif
 
 
-
-#define SCALE 1.754f
-#define OFFSET .05f
 #define PI 3.141593f
 #define TWOPI 6.283185f
 
@@ -188,7 +185,7 @@ typedef float(*IFractal3d)(float, float, float, float, float, float, int, float,
 
 
 extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
-extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo, pscale, poffset, F3, G3,G32,G33;
+extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo,F3, G3,G32,G33;
 
 
 FAST_NOISE_DLL_API inline extern void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves);
