@@ -35,14 +35,17 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 #endif
 	//drop out to scalar if we don't
 #ifndef SSE41
-	uSIMD* ux = x;
-	uSIMD* uy = y;
-	uSIMD* uz = z;
-	for (int i = 0; i < VECTOR_SIZE; i++)
+	uSIMD ux;
+	ux.m = *x;
+	uSIMD uy;
+	uy.m = *y;
+	uSIMD uz;
+	uz.m = *z;
+	for (int x = 0; x < VECTOR_SIZE; x++)
 	{
-		i.a[i] = fastFloor((*ux).a[i]+s.a[i]);
-		j.a[i] = fastFloor((*uy).a[i]+s.a[i]);
-		k.a[i] = fastFloor((*uz).a[i]+s.a[i]);
+		i.a[x] = fastFloor((ux).a[x]+s.a[x]);
+		j.a[x] = fastFloor((uy).a[x]+s.a[x]);
+		k.a[x] = fastFloor((uz).a[x]+s.a[x]);
 	}
 #endif
 
@@ -208,14 +211,15 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 
 	//if ti < 0 then 0 else ni
 	SIMD cond;
-	cond = LessThan(t0, zero);
-	n0 = Or(And(cond, zero), AndNot(cond, n0));
+	
+	cond = LessThan(t0, zero);	
+	n0 = BlendV(n0,zero,cond);
 	cond = LessThan(t1, zero);
-	n1 = Or(And(cond, zero), AndNot(cond, n1));
+	n1 = BlendV(n1,zero,cond);
 	cond = LessThan(t2, zero);
-	n2 = Or(And(cond, zero), AndNot(cond, n2));
+	n2 = BlendV(n2,zero,cond);
 	cond = LessThan(t3, zero);
-	n3 = Or(And(cond, zero), AndNot(cond, n3));
+	n3 = BlendV(n3,zero,cond);
 
 
 	return  Mul(thirtytwo, Add(n0, Add(n1, Add(n2, n3))));
@@ -360,20 +364,19 @@ inline SIMD gradSIMD3d(SIMDi * __restrict hash, SIMD * __restrict x, SIMD * __re
 
 
 	//if h < 8 then x, else y
-	SIMD u = CastToFloat(LessThani(h, eight));
-	u = Or(And(u, *x), AndNot(u, *y));
+	SIMD u = CastToFloat(LessThani(h, eight));	
+	u = BlendV(*y,*x,u);
 
 	//if h < 4 then y else if h is 12 or 14 then x else z
 	SIMD v = CastToFloat(LessThani(h, four));
-	SIMD h12o14 = CastToFloat(Equali(zeroi, Ori(Equali(h, twelve), Equali(h, fourteen))));
-	h12o14 = Or(AndNot(h12o14, *x), And(h12o14, *z));
-	v = Or(And(v, *y), AndNot(v, h12o14));
-
+	SIMD h12o14 = CastToFloat(Equali(zeroi, Ori(Equali(h, twelve), Equali(h, fourteen))));	
+	h12o14 = BlendV(*x,*z,h12o14);	
+	v = BlendV(h12o14,*y,v);
 
 	//if h1 then -u else u	
 	//if h2 then -v else v
-	//then add them
-	return Add(Or(AndNot(h1, Sub(zero, u)), And(h1, u)), Or(AndNot(h2, Sub(zero, v)), And(h2, v)));
+	//then add them	
+	return Add(BlendV(Sub(zero,u),u,h1), BlendV(Sub(zero,v),v,h2));
 }
 
 
@@ -390,14 +393,17 @@ inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restric
 #endif
 	//drop out to scalar if we don't
 #ifndef SSE41
-	uSIMD* ux = x;
-	uSIMD* uy = y;
-	uSIMD* uz = z;
+	uSIMD ux;
+	ux.m = *x;
+	uSIMD uy;
+	uy.m = *y;
+	uSIMD uz;
+	uz.m = *z;
 	for (int i = 0; i < VECTOR_SIZE; i++)
-	{
-		ix0.a[i] = fastFloor((*ux).a[i]);
-		iy0.a[i] = fastFloor((*uy).a[i]);
-		iz0.a[i] = fastFloor((*uz).a[i]);
+	{		
+		ix0.a[i] = fastFloor((ux).a[i]);
+		iy0.a[i] = fastFloor((uy).a[i]);
+		iz0.a[i] = fastFloor((uz).a[i]);
 	}
 #endif
 

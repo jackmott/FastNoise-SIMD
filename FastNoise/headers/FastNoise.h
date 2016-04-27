@@ -70,6 +70,12 @@ typedef __m128i SIMDi;
 #define Max(x,y) _mm_max_ps(x,y)
 #define Maxi(x,y) _mm_max_epi32(x,y)
 #define Min(x,y) _mm_min_ps(x,y)
+#ifndef SSE41
+#define BlendV(x,y,z) Or(AndNot(z,x), And(z,y))   //if we don't have sse4
+#else
+#define BlendV(x,y,z) _mm_blendv_ps(x,y,z)	
+#endif
+	
 #endif
 #ifdef AVX2
 
@@ -118,7 +124,8 @@ typedef __m256i SIMDi;
 #define Maxi(x,y) _mm256_max_epi32(x,y)
 #define Min(x,y) _mm256_min_ps(x,y)
 #define Gather(x,y,z) _mm256_i32gather_epi32(x,y,z)
-#define Gatherf(x,y,z) _mm256_i32gather_ps(x,y,z);
+#define Gatherf(x,y,z) _mm256_i32gather_ps(x,y,z)
+#define BlendV(x,y,z) _mm256_blendv_ps(x,y,z)
 #endif
 
 
