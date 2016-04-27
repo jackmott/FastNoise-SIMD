@@ -163,7 +163,7 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 		gi1x, gi1y, gi1z,
 		gi2x, gi2y, gi2z,
 		gi3x, gi3y, gi3z;
-#ifndef USEGATHER
+#ifndef AVX2
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
 		gi0x.a[i] = gradX[gi0.a[i]];
@@ -183,8 +183,7 @@ inline SIMD simplexSIMD3d(SIMD* x, SIMD* y, SIMD* z) {
 		gi3z.a[i] = gradZ[gi3.a[i]];
 
 	}
-#endif
-#ifdef USEGATHER
+#else
 	gi0x.m = Gatherf(gradX, gi0.m, 4);
 	gi0y.m = Gatherf(gradY, gi0.m, 4);
 	gi0z.m = Gatherf(gradZ, gi0.m, 4);
@@ -453,9 +452,7 @@ inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restric
 
 
 	uSIMDi p[8];
-#ifndef USEGATHER
-
-	
+#ifndef AVX2
 	for (int i = 0; i < VECTOR_SIZE; i++)
 	{
 		p[0].a[i] = perm[ix0.a[i] + perm[iy0.a[i] + perm[iz0.a[i]]]];
@@ -468,8 +465,7 @@ inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restric
 		p[7].a[i] = perm[ix1.a[i] + perm[iy1.a[i] + perm[iz1.a[i]]]];
 
 	}
-#endif // !AVX
-#ifdef USEGATHER 
+#else
 	SIMDi pz0, pz1, pz0y0, pz0y1, pz1y1, pz1y0;
 
 	pz0 = Gather(perm, iz0.m, 4);
@@ -503,8 +499,6 @@ inline SIMD perlinSIMD3d(SIMD* __restrict x, SIMD* __restrict y, SIMD* __restric
 
 	p[7].m = Addi(ix1.m, pz1y1);
 	p[7].m = Gather(perm, p[7].m, 4);
-
-
 #endif // AVX
 
 

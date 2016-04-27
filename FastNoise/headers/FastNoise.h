@@ -4,12 +4,27 @@
 
 #define FAST_NOISE_DLL_API __declspec(dllexport)
 
+#include <stdint.h>
 
+#define SSE2  //indicates we want SSE2
+#define SSE41 //indicates we want SSE4.1 instructions (floor and blend is available)
+#define AVX2  //indicates we want AVX2 instructions (double speed!) 
+
+
+#ifndef AVX2
 #include <xmmintrin.h> //SSE
 #include <emmintrin.h> //SSE 2
+#endif
+
+#ifdef SSE41
 #include <smmintrin.h> // SSE4.1
+#endif
+
+#ifdef AVX2
 #include <immintrin.h> //avx2
-#include <stdint.h>
+#endif
+
+
 //#include <zmmintrin.h> //avx512 the world is not yet ready...SOON
 
 
@@ -20,16 +35,11 @@
 
 
 
-#define SSE2  //indicates we want SSE2
-#define SSE41 //indicates we want SSE4.1 instructions (floor is available)
-#define AVX2 //indicates we want AVX2 instructions (double speed!) 
-#define USEGATHER  //use the avx gather instruction to index the perm array
-
-//creat types we can use in either the 128 or 256 case
+// create types we can use in either the 128 or 256 case
 #ifndef AVX2
 // m128 will be our base type
-typedef __m128 SIMD;
-typedef __m128i SIMDi;
+typedef __m128 SIMD;   //for floats
+typedef __m128i SIMDi; //for integers
 
 //we process 4 at a time
 #define VECTOR_SIZE 4
@@ -66,7 +76,9 @@ typedef __m128i SIMDi;
 #define LessThani(x,y) _mm_cmpgt_epi32(y,x) 
 #define LessThanOrEq(x,y) _mm_cmple_ps(x,y)
 #define NotEqual(x,y) _mm_cmpneq_ps(x,y)
+#ifdef SSE41
 #define Floor(x) _mm_floor_ps(x)
+#endif
 #define Max(x,y) _mm_max_ps(x,y)
 #define Maxi(x,y) _mm_max_epi32(x,y)
 #define Min(x,y) _mm_min_ps(x,y)
@@ -80,8 +92,8 @@ typedef __m128i SIMDi;
 #ifdef AVX2
 
 // m256 will be our base type
-typedef __m256 SIMD;
-typedef __m256i SIMDi;
+typedef __m256 SIMD;  //for floats
+typedef __m256i SIMDi; //for integers
 
 //process 8 at t time
 #define VECTOR_SIZE 8
@@ -207,10 +219,9 @@ const float gradZ[] =
 };
 
 
-#ifndef USEGATHER
+#ifndef AVX2
 const unsigned char perm[] =
-#endif
-#ifdef USEGATHER
+#else
 const int32_t perm[] =
 #endif
 { 151,160,137,91,90,15,
@@ -244,10 +255,9 @@ const int32_t perm[] =
 #endif
 
 //Used for simplex
-#ifndef USEGATHER
+#ifndef AVX2
 const unsigned char permMOD12[] =
-#endif
-#ifdef USEGATHER
+#else
 const int32_t permMOD12[] =
 #endif
 {
