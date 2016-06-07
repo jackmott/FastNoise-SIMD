@@ -1,5 +1,7 @@
 # FastNoise SIMD
 Ultra fast Perlin and Simplex noise functions sped up with SSE2,SSE4, and AVX2 instructions. 
+If you are interested in this you may want to refer to: https://github.com/Auburns/FastNoiseSIMD
+A similarly named library inspired by this one that is more user friendly and even faster. 
 
 FastNoise.h / cpp
 -----------------
