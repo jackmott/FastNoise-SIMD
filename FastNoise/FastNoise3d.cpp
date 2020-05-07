@@ -1,4 +1,4 @@
-#include "headers\FastNoise3d.h"
+#include "headers/FastNoise3d.h"
 
 
 // For non SIMD only

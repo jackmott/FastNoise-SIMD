@@ -2,7 +2,11 @@
 #ifndef FASTNOISE_H
 #define FASTNOISE_H
 
+#if defined(_WIN32)
 #define FAST_NOISE_DLL_API __declspec(dllexport)
+#else
+#define FAST_NOISE_DLL_API
+#endif
 
 #include <stdint.h>
 
