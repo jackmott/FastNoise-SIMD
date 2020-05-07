@@ -1,4 +1,4 @@
-#include "headers\FractalNoise3d.h"
+#include "headers/FractalNoise3d.h"
 #include <stdio.h>
 //If you ever call something with 1 octave, call this instead
  void plainSIMD3d(SIMD* out, Settings*  S,ISIMDNoise3d noise )

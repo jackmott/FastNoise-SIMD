@@ -2,7 +2,11 @@
 #ifndef FASTNOISE_H
 #define FASTNOISE_H
 
+#if defined(_WIN32)
 #define FAST_NOISE_DLL_API __declspec(dllexport)
+#else
+#define FAST_NOISE_DLL_API
+#endif
 
 #include <stdint.h>
 
@@ -188,8 +192,8 @@ extern SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 extern SIMD minusonef, zero,psix, onef, six, fifteen, ten, thirtytwo,F3, G3,G32,G33;
 
 
-FAST_NOISE_DLL_API inline extern void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves);
-FAST_NOISE_DLL_API inline extern void initSIMDSimplex();
+FAST_NOISE_DLL_API extern void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves);
+FAST_NOISE_DLL_API extern void initSIMDSimplex();
 
 
 

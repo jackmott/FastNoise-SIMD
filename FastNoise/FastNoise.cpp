@@ -2,14 +2,14 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
-#include "headers\FastNoise.h"
+#include "headers/FastNoise.h"
 
 
 
 SIMDi zeroi, one, two, four, eight, twelve, fourteen, fifteeni, ff;
 SIMD minusonef, zero,psix, onef, six, fifteen, ten,thirtytwo,F3, G3,G32,G33;
 
-extern inline void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves)
+void initSIMD(Settings * __restrict S, float frequency, float lacunarity, float offset, float gain, int octaves)
 {
 	S->frequency = SetOne(frequency);
 	S->lacunarity = SetOne(lacunarity);
@@ -38,7 +38,7 @@ extern inline void initSIMD(Settings * __restrict S, float frequency, float lacu
 				
 }
 
-inline void initSIMDSimplex()
+void initSIMDSimplex()
 {
 	F3 = SetOne(1.0f / 3.0f);
 	G3 = SetOne(1.0f / 6.0f);
@@ -47,7 +47,4 @@ inline void initSIMDSimplex()
 
 	psix = SetOne(0.6);
 	thirtytwo = SetOne(32.0);
-
-
-
 }
